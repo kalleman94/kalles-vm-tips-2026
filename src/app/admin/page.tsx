@@ -16,6 +16,9 @@ export default function AdminPage() {
   const [results, setResults] = useState<Record<number, { home: string; away: string; winner: string }>>({})
   const [saving, setSaving] = useState<number | null>(null)
   const [savedIds, setSavedIds] = useState<number[]>([])
+  const [teamEdits, setTeamEdits] = useState<Record<number, { home: string; away: string }>>({})
+  const [savingTeam, setSavingTeam] = useState<number | null>(null)
+  const [savedTeamIds, setSavedTeamIds] = useState<number[]>([])
   const [newParticipant, setNewParticipant] = useState({ name: '', pin: '' })
   const [addingParticipant, setAddingParticipant] = useState(false)
   const [participantMsg, setParticipantMsg] = useState('')
@@ -105,6 +108,7 @@ export default function AdminPage() {
     if (data) {
       setMatches(data)
       const map: Record<number, { home: string; away: string; winner: string }> = {}
+      const teamMap: Record<number, { home: string; away: string }> = {}
       data.forEach((m: any) => {
         if (m.match_results?.length) {
           const r = m.match_results[0]
@@ -112,8 +116,10 @@ export default function AdminPage() {
         } else {
           map[m.id] = { home: '', away: '', winner: '' }
         }
+        teamMap[m.id] = { home: m.home_team, away: m.away_team }
       })
       setResults(map)
+      setTeamEdits(teamMap)
     }
   }
 
@@ -129,6 +135,20 @@ export default function AdminPage() {
     setSaving(null)
     setSavedIds(prev => [...prev, matchId])
     setTimeout(() => setSavedIds(prev => prev.filter(id => id !== matchId)), 3000)
+  }
+
+  async function saveTeam(matchId: number) {
+    const t = teamEdits[matchId]
+    if (!t?.home.trim() || !t?.away.trim()) return
+    setSavingTeam(matchId)
+    const { error } = await supabase.from('matches')
+      .update({ home_team: t.home.trim(), away_team: t.away.trim() })
+      .eq('id', matchId)
+    if (error) alert('Fel: ' + error.message)
+    setSavingTeam(null)
+    setSavedTeamIds(prev => [...prev, matchId])
+    setTimeout(() => setSavedTeamIds(prev => prev.filter(id => id !== matchId)), 3000)
+    setMatches(prev => prev.map(m => m.id === matchId ? { ...m, home_team: t.home.trim(), away_team: t.away.trim() } : m))
   }
 
   async function addParticipant(e: React.FormEvent) {
@@ -277,6 +297,26 @@ export default function AdminPage() {
         </form>
       </div>
 
+      {/* Edit match teams */}
+      <div className="bg-white rounded-xl shadow overflow-hidden mb-8">
+        <div className="px-4 py-3 text-sm font-bold text-white" style={{ backgroundColor: 'var(--color-primary)' }}>
+          ✏️ Redigera matchlag
+        </div>
+        <div className="divide-y">
+          {matches.map(m => (
+            <TeamEditRow
+              key={m.id}
+              match={m}
+              edit={teamEdits[m.id]}
+              saving={savingTeam === m.id}
+              saved={savedTeamIds.includes(m.id)}
+              onChange={(field, val) => setTeamEdits(prev => ({ ...prev, [m.id]: { ...prev[m.id], [field]: val } }))}
+              onSave={() => saveTeam(m.id)}
+            />
+          ))}
+        </div>
+      </div>
+
       {/* Add participant */}
       <div className="bg-white rounded-xl shadow p-5 mb-8">
         <h2 className="font-bold text-lg mb-4" style={{ color: 'var(--color-primary)' }}>Lägg till deltagare</h2>
@@ -337,6 +377,47 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function TeamEditRow({
+  match, edit, saving, saved, onChange, onSave
+}: {
+  match: Match
+  edit?: { home: string; away: string }
+  saving: boolean
+  saved: boolean
+  onChange: (field: 'home' | 'away', val: string) => void
+  onSave: () => void
+}) {
+  const label = match.phase === 'group'
+    ? `Gr ${match.group_name}`
+    : match.phase.toUpperCase()
+  return (
+    <div className="px-4 py-2 flex items-center gap-2 flex-wrap text-sm">
+      <span className="text-xs bg-gray-100 rounded px-2 py-0.5 text-gray-500 shrink-0 w-14 text-center">{label}</span>
+      <input
+        type="text"
+        value={edit?.home ?? match.home_team}
+        onChange={e => onChange('home', e.target.value)}
+        className="flex-1 min-w-24 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+      />
+      <span className="text-gray-400 text-xs shrink-0">vs</span>
+      <input
+        type="text"
+        value={edit?.away ?? match.away_team}
+        onChange={e => onChange('away', e.target.value)}
+        className="flex-1 min-w-24 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+      />
+      <button
+        onClick={onSave}
+        disabled={saving}
+        className="px-3 py-1 rounded text-white text-xs font-medium disabled:opacity-50 transition-colors shrink-0"
+        style={{ backgroundColor: saved ? 'var(--color-green)' : 'var(--color-primary)' }}
+      >
+        {saving ? '...' : saved ? '✓' : 'Spara'}
+      </button>
     </div>
   )
 }
