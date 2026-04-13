@@ -34,6 +34,11 @@ export default function AdminPage() {
   const [savingBonus, setSavingBonus] = useState(false)
   const [bonusMsg, setBonusMsg] = useState('')
 
+  // Collapsible sections
+  const [teamsOpen, setTeamsOpen] = useState(false)
+  const [groupResultsOpen, setGroupResultsOpen] = useState(false)
+  const [knockoutResultsOpen, setKnockoutResultsOpen] = useState(false)
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }: { data: any }) => {
       if (data.user) {
@@ -265,6 +270,36 @@ export default function AdminPage() {
           </button>
         </div>
 
+        {/* Add participant */}
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 mt-4">Deltagare</p>
+        <div className="p-4 bg-gray-50 rounded-lg mb-4">
+          <p className="font-medium text-sm mb-3">👤 Lägg till deltagare</p>
+          <form onSubmit={addParticipant} className="flex gap-3 flex-wrap items-end">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Namn</label>
+              <input
+                type="text" value={newParticipant.name} onChange={e => setNewParticipant(p => ({ ...p, name: e.target.value }))}
+                required placeholder="Deltagarens namn"
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-44"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">PIN-kod</label>
+              <input
+                type="text" value={newParticipant.pin} onChange={e => setNewParticipant(p => ({ ...p, pin: e.target.value }))}
+                required placeholder="t.ex. 1234" maxLength={10}
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-28"
+              />
+            </div>
+            <button type="submit" disabled={addingParticipant}
+              className="py-2 px-4 rounded-lg text-white text-sm font-medium disabled:opacity-50"
+              style={{ backgroundColor: 'var(--color-green)' }}>
+              {addingParticipant ? 'Lägger till...' : 'Lägg till'}
+            </button>
+            {participantMsg && <span className="text-sm text-green-700">{participantMsg}</span>}
+          </form>
+        </div>
+
         {/* Bonus answers */}
         <form onSubmit={saveBonus}>
           <p className="font-medium text-sm mb-3">🏆 Faktiska bonussvar (för poängberäkning)</p>
@@ -299,82 +334,74 @@ export default function AdminPage() {
 
       {/* Edit match teams */}
       <div className="bg-white rounded-xl shadow overflow-hidden mb-8">
-        <div className="px-4 py-3 text-sm font-bold text-white" style={{ backgroundColor: 'var(--color-primary)' }}>
-          ✏️ Redigera matchlag
-        </div>
-        <div className="divide-y">
-          {matches.map(m => (
-            <TeamEditRow
-              key={m.id}
-              match={m}
-              edit={teamEdits[m.id]}
-              saving={savingTeam === m.id}
-              saved={savedTeamIds.includes(m.id)}
-              onChange={(field, val) => setTeamEdits(prev => ({ ...prev, [m.id]: { ...prev[m.id], [field]: val } }))}
-              onSave={() => saveTeam(m.id)}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Add participant */}
-      <div className="bg-white rounded-xl shadow p-5 mb-8">
-        <h2 className="font-bold text-lg mb-4" style={{ color: 'var(--color-primary)' }}>Lägg till deltagare</h2>
-        <form onSubmit={addParticipant} className="flex gap-3 flex-wrap items-end">
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Namn</label>
-            <input
-              type="text" value={newParticipant.name} onChange={e => setNewParticipant(p => ({ ...p, name: e.target.value }))}
-              required placeholder="Deltagarens namn"
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-44"
-            />
+        <button
+          onClick={() => setTeamsOpen(o => !o)}
+          className="w-full flex items-center justify-between px-4 py-3 text-sm font-bold text-white"
+          style={{ backgroundColor: 'var(--color-primary)' }}
+        >
+          <span>✏️ Redigera matchlag</span>
+          <span className="text-white text-base">{teamsOpen ? '▲' : '▼'}</span>
+        </button>
+        {teamsOpen && (
+          <div className="divide-y">
+            {matches.map(m => (
+              <TeamEditRow
+                key={m.id}
+                match={m}
+                edit={teamEdits[m.id]}
+                saving={savingTeam === m.id}
+                saved={savedTeamIds.includes(m.id)}
+                onChange={(field, val) => setTeamEdits(prev => ({ ...prev, [m.id]: { ...prev[m.id], [field]: val } }))}
+                onSave={() => saveTeam(m.id)}
+              />
+            ))}
           </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">PIN-kod</label>
-            <input
-              type="text" value={newParticipant.pin} onChange={e => setNewParticipant(p => ({ ...p, pin: e.target.value }))}
-              required placeholder="t.ex. 1234" maxLength={10}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-28"
-            />
-          </div>
-          <button type="submit" disabled={addingParticipant}
-            className="py-2 px-4 rounded-lg text-white text-sm font-medium disabled:opacity-50"
-            style={{ backgroundColor: 'var(--color-green)' }}>
-            {addingParticipant ? 'Lägger till...' : 'Lägg till'}
-          </button>
-          {participantMsg && <span className="text-sm text-green-700">{participantMsg}</span>}
-        </form>
+        )}
       </div>
 
       {/* Results */}
       <div className="bg-white rounded-xl shadow overflow-hidden mb-8">
-        <div className="px-4 py-3 text-sm font-bold text-white" style={{ backgroundColor: 'var(--color-primary)' }}>
-          Gruppspelresultat
-        </div>
-        <div className="divide-y">
-          {groupMatches.map(m => (
-            <ResultRow key={m.id} match={m} result={results[m.id]}
-              saving={saving === m.id} saved={savedIds.includes(m.id)}
-              onChange={(field, val) => setResults(prev => ({ ...prev, [m.id]: { ...prev[m.id], [field]: val } }))}
-              onSave={() => saveResult(m.id)} showWinner={false} />
-          ))}
-        </div>
+        <button
+          onClick={() => setGroupResultsOpen(o => !o)}
+          className="w-full flex items-center justify-between px-4 py-3 text-sm font-bold text-white"
+          style={{ backgroundColor: 'var(--color-primary)' }}
+        >
+          <span>Gruppspelresultat</span>
+          <span className="text-white text-base">{groupResultsOpen ? '▲' : '▼'}</span>
+        </button>
+        {groupResultsOpen && (
+          <div className="divide-y">
+            {groupMatches.map(m => (
+              <ResultRow key={m.id} match={m} result={results[m.id]}
+                saving={saving === m.id} saved={savedIds.includes(m.id)}
+                onChange={(field, val) => setResults(prev => ({ ...prev, [m.id]: { ...prev[m.id], [field]: val } }))}
+                onSave={() => saveResult(m.id)} showWinner={false} />
+            ))}
+          </div>
+        )}
       </div>
 
       {knockoutMatches.length > 0 && (
         <div className="bg-white rounded-xl shadow overflow-hidden">
-          <div className="px-4 py-3 text-sm font-bold text-white" style={{ backgroundColor: 'var(--color-accent)' }}>
-            Slutspelsresultat
-          </div>
-          <div className="divide-y">
-            {knockoutMatches.map(m => (
-              <ResultRow key={m.id} match={m} result={results[m.id]}
-                saving={saving === m.id} saved={savedIds.includes(m.id)}
-                phase={phaseLabel[m.phase] ?? m.phase}
-                onChange={(field, val) => setResults(prev => ({ ...prev, [m.id]: { ...prev[m.id], [field]: val } }))}
-                onSave={() => saveResult(m.id)} showWinner />
-            ))}
-          </div>
+          <button
+            onClick={() => setKnockoutResultsOpen(o => !o)}
+            className="w-full flex items-center justify-between px-4 py-3 text-sm font-bold text-white"
+            style={{ backgroundColor: 'var(--color-accent)' }}
+          >
+            <span>Slutspelsresultat</span>
+            <span className="text-white text-base">{knockoutResultsOpen ? '▲' : '▼'}</span>
+          </button>
+          {knockoutResultsOpen && (
+            <div className="divide-y">
+              {knockoutMatches.map(m => (
+                <ResultRow key={m.id} match={m} result={results[m.id]}
+                  saving={saving === m.id} saved={savedIds.includes(m.id)}
+                  phase={phaseLabel[m.phase] ?? m.phase}
+                  onChange={(field, val) => setResults(prev => ({ ...prev, [m.id]: { ...prev[m.id], [field]: val } }))}
+                  onSave={() => saveResult(m.id)} showWinner />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
