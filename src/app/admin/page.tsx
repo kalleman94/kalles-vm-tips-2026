@@ -106,21 +106,19 @@ export default function AdminPage() {
   }
 
   async function loadMatches() {
-    const { data } = await supabase
-      .from('matches')
-      .select('*, match_results(*)')
-      .order('match_date')
-    if (data) {
-      setMatches(data)
+    const [{ data: matchData }, { data: resultData }] = await Promise.all([
+      supabase.from('matches').select('*').order('match_date'),
+      supabase.from('match_results').select('*'),
+    ])
+    if (matchData) {
+      setMatches(matchData)
       const map: Record<number, { home: string; away: string; winner: string }> = {}
       const teamMap: Record<number, { home: string; away: string }> = {}
-      data.forEach((m: any) => {
-        if (m.match_results?.length) {
-          const r = m.match_results[0]
-          map[m.id] = { home: String(r.home_goals ?? ''), away: String(r.away_goals ?? ''), winner: r.winner ?? '' }
-        } else {
-          map[m.id] = { home: '', away: '', winner: '' }
-        }
+      matchData.forEach((m: any) => {
+        const r = resultData?.find((r: any) => r.match_id === m.id)
+        map[m.id] = r
+          ? { home: String(r.home_goals ?? ''), away: String(r.away_goals ?? ''), winner: r.winner ?? '' }
+          : { home: '', away: '', winner: '' }
         teamMap[m.id] = { home: m.home_team, away: m.away_team }
       })
       setResults(map)
