@@ -38,6 +38,14 @@ export default function AdminPage() {
   const [teamsOpen, setTeamsOpen] = useState(false)
   const [groupResultsOpen, setGroupResultsOpen] = useState(false)
   const [knockoutResultsOpen, setKnockoutResultsOpen] = useState(false)
+  const [contentOpen, setContentOpen] = useState(false)
+
+  // Content editing
+  const [infoBoxContent, setInfoBoxContent] = useState('')
+  const [infoBoxVisible, setInfoBoxVisible] = useState(false)
+  const [rulesContent, setRulesContent] = useState('')
+  const [savingContent, setSavingContent] = useState<string | null>(null)
+  const [contentMsg, setContentMsg] = useState('')
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }: { data: any }) => {
@@ -77,6 +85,9 @@ export default function AdminPage() {
       top_scorer: map['actual_top_scorer'] ?? '',
       third_place: map['actual_third_place'] ?? '',
     })
+    setInfoBoxContent(map['info_box_content'] ?? '')
+    setInfoBoxVisible(map['info_box_visible'] === 'true')
+    setRulesContent(map['rules_content'] ?? '')
   }
 
   async function toggleSetting(key: string, current: boolean, setter: (v: boolean) => void) {
@@ -169,6 +180,27 @@ export default function AdminPage() {
       setNewParticipant({ name: '', pin: '' })
     }
     setTimeout(() => setParticipantMsg(''), 4000)
+  }
+
+  async function saveInfoBox(e: React.FormEvent) {
+    e.preventDefault()
+    setSavingContent('info')
+    await Promise.all([
+      supabase.from('settings').upsert({ key: 'info_box_content', value: infoBoxContent }, { onConflict: 'key' }),
+      supabase.from('settings').upsert({ key: 'info_box_visible', value: String(infoBoxVisible) }, { onConflict: 'key' }),
+    ])
+    setSavingContent(null)
+    setContentMsg('✓ Inforutan sparad!')
+    setTimeout(() => setContentMsg(''), 3000)
+  }
+
+  async function saveRules(e: React.FormEvent) {
+    e.preventDefault()
+    setSavingContent('rules')
+    await supabase.from('settings').upsert({ key: 'rules_content', value: rulesContent }, { onConflict: 'key' })
+    setSavingContent(null)
+    setContentMsg('✓ Reglerna sparade!')
+    setTimeout(() => setContentMsg(''), 3000)
   }
 
   const groupMatches = matches.filter(m => m.phase === 'group')
@@ -328,6 +360,71 @@ export default function AdminPage() {
             {bonusMsg && <span className="text-sm text-green-700">{bonusMsg}</span>}
           </div>
         </form>
+      </div>
+
+      {/* Content editor */}
+      <div className="bg-white rounded-xl shadow overflow-hidden mb-8">
+        <button
+          onClick={() => setContentOpen(o => !o)}
+          className="w-full flex items-center justify-between px-4 py-3 text-sm font-bold text-white"
+          style={{ backgroundColor: 'var(--color-primary)' }}
+        >
+          <span>📝 Redigera innehåll & regler</span>
+          <span className="text-white text-base">{contentOpen ? '▲' : '▼'}</span>
+        </button>
+        {contentOpen && (
+          <div className="p-5 flex flex-col gap-6">
+            {contentMsg && <p className="text-sm text-green-700 font-medium">{contentMsg}</p>}
+
+            {/* Info box */}
+            <form onSubmit={saveInfoBox}>
+              <div className="flex items-center justify-between mb-2">
+                <p className="font-medium text-sm">🏠 Inforuta på startsidan (ovanför scoreboard)</p>
+                <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer select-none">
+                  <span>{infoBoxVisible ? '👁️ Synlig' : '🙈 Dold'}</span>
+                  <button
+                    type="button"
+                    onClick={() => setInfoBoxVisible(v => !v)}
+                    className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors ${infoBoxVisible ? 'bg-green-500' : 'bg-gray-300'}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${infoBoxVisible ? 'translate-x-5' : 'translate-x-1'}`} />
+                  </button>
+                </label>
+              </div>
+              <p className="text-xs text-gray-400 mb-2">HTML-formatering stöds (t.ex. &lt;strong&gt;, &lt;ul&gt;, &lt;table&gt;).</p>
+              <textarea
+                value={infoBoxContent}
+                onChange={e => setInfoBoxContent(e.target.value)}
+                rows={8}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button type="submit" disabled={savingContent === 'info'}
+                className="mt-2 py-2 px-4 rounded-lg text-white text-sm font-medium disabled:opacity-50"
+                style={{ backgroundColor: 'var(--color-primary)' }}>
+                {savingContent === 'info' ? 'Sparar...' : 'Spara inforuta'}
+              </button>
+            </form>
+
+            <hr className="border-gray-200" />
+
+            {/* Rules */}
+            <form onSubmit={saveRules}>
+              <p className="font-medium text-sm mb-2">📋 Regeltext (visas alltid på sidan /regler)</p>
+              <p className="text-xs text-gray-400 mb-2">HTML-formatering stöds (t.ex. &lt;h2&gt;, &lt;table&gt;, &lt;ul&gt;).</p>
+              <textarea
+                value={rulesContent}
+                onChange={e => setRulesContent(e.target.value)}
+                rows={12}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button type="submit" disabled={savingContent === 'rules'}
+                className="mt-2 py-2 px-4 rounded-lg text-white text-sm font-medium disabled:opacity-50"
+                style={{ backgroundColor: 'var(--color-primary)' }}>
+                {savingContent === 'rules' ? 'Sparar...' : 'Spara regler'}
+              </button>
+            </form>
+          </div>
+        )}
       </div>
 
       {/* Edit match teams */}

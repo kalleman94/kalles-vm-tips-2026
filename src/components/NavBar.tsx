@@ -7,6 +7,7 @@ const links = [
   { href: '/', label: 'Scoreboard' },
   { href: '/tips', label: 'Mitt tips' },
   { href: '/allas-tips', label: 'Inlämnade tips' },
+  { href: '/regler', label: 'Regler' },
 ]
 
 export default function NavBar() {
