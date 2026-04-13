@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { Match } from '@/lib/types'
+import { DEFAULT_INFO, DEFAULT_RULES } from '@/lib/defaults'
 
 export default function AdminPage() {
   const supabase = createClient()
@@ -85,9 +86,9 @@ export default function AdminPage() {
       top_scorer: map['actual_top_scorer'] ?? '',
       third_place: map['actual_third_place'] ?? '',
     })
-    setInfoBoxContent(map['info_box_content'] ?? '')
+    setInfoBoxContent(map['info_box_content'] || DEFAULT_INFO)
     setInfoBoxVisible(map['info_box_visible'] === 'true')
-    setRulesContent(map['rules_content'] ?? '')
+    setRulesContent(map['rules_content'] || DEFAULT_RULES)
   }
 
   async function toggleSetting(key: string, current: boolean, setter: (v: boolean) => void) {

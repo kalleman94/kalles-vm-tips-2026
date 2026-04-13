@@ -4,16 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { ParticipantScore } from '@/lib/types'
 
-const DEFAULT_INFO = `<h2>🏆 Välkommen till VM-tips 2026!</h2>
-<p>Tävla mot dina vänner om att tippa rätt i fotbolls-VM 2026! Den med flest poäng vinner potten. Insatsen är <strong>100 kr</strong> – swishas till spelansvarig senast 1 dygn innan turneringen startar.</p>
-<h3>Poängsystem – snabbguide</h3>
-<ul>
-  <li>⚽ <strong>Gruppspel &amp; slutspel:</strong> Rätt antal mål hemma/borta = 2p vardera · Rätt utfall (1/X/2) = 3p · Max 7p per match.</li>
-  <li>🏟️ <strong>Slutspelsbonus:</strong> Rätt vinnare i Semifinal +6p · Bronsmatch +8p · Final +8p.</li>
-  <li>🎯 <strong>Bonusfrågor:</strong> VM-vinnare 20p · Skyttekung 20p · Bronsmedaljör 10p.</li>
-  <li>💰 <strong>Prispott:</strong> 🥇 1:a plats 60% · 🥈 2:a plats 25% · 🥉 3:e plats 15%.</li>
-</ul>
-<p>📋 Läs de fullständiga reglerna under <a href="/regler">Regler</a>.</p>`
+import { DEFAULT_INFO } from '@/lib/defaults'
 
 export default function ScoreboardPage() {
   const [scores, setScores] = useState<ParticipantScore[]>([])
