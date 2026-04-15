@@ -3,10 +3,10 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 const links = [
-  { href: '/', label: 'Scoreboard' },
-  { href: '/tips', label: 'Mitt tips' },
-  { href: '/allas-tips', label: 'Inlämnade tips' },
-  { href: '/regler', label: 'Regler' },
+  { href: '/', label: 'Scoreboard', mobileLabel: 'Scoreboard' },
+  { href: '/tips', label: 'Mitt tips', mobileLabel: 'Mitt tips' },
+  { href: '/allas-tips', label: 'Inlämnade tips', mobileLabel: 'Alla tips' },
+  { href: '/regler', label: 'Regler', mobileLabel: 'Regler' },
 ]
 
 export default function NavBar() {
@@ -53,7 +53,7 @@ export default function NavBar() {
                 pathname === l.href ? 'bg-white/20' : 'hover:bg-white/10'
               }`}
             >
-              {l.label}
+              {l.mobileLabel}
             </Link>
           ))}
         </div>
