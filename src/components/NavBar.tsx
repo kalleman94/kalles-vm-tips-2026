@@ -49,7 +49,7 @@ export default function NavBar() {
             <Link
               key={l.href}
               href={l.href}
-              className={`whitespace-nowrap px-2 py-1 rounded text-xs font-medium transition-colors ${
+              className={`whitespace-nowrap px-3 py-1.5 rounded text-sm font-medium transition-colors ${
                 pathname === l.href ? 'bg-white/20' : 'hover:bg-white/10'
               }`}
             >
