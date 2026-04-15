@@ -560,8 +560,9 @@ function ResultRow({
   return (
     <div className="px-4 py-3 flex items-center gap-2 flex-wrap text-sm">
       {phase && <span className="text-xs bg-gray-100 rounded px-2 py-0.5 text-gray-600 shrink-0">{phase}</span>}
-      <span className="text-gray-400 text-xs w-16 shrink-0">
-        {new Date(match.match_date).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' })}
+      <span className="text-gray-400 text-xs w-20 shrink-0 leading-tight">
+        <span className="block">{new Date(match.match_date).toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm', month: 'short', day: 'numeric' })}</span>
+        <span className="block">{new Date(match.match_date).toLocaleTimeString('sv-SE', { timeZone: 'Europe/Stockholm', hour: '2-digit', minute: '2-digit' })}</span>
       </span>
       <span className="flex-1 text-right font-medium text-xs">{match.home_team}</span>
       <input type="number" min={0} max={20} value={result?.home ?? ''}

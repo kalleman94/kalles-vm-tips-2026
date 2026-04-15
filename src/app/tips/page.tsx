@@ -266,8 +266,9 @@ function MatchRow({
 }) {
   return (
     <div className="px-4 py-3 flex items-center gap-3 flex-wrap text-sm">
-      <span className="text-gray-400 w-20 shrink-0">
-        {new Date(match.match_date).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' })}
+      <span className="text-gray-400 w-24 shrink-0 text-xs leading-tight">
+        <span className="block">{new Date(match.match_date).toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm', month: 'short', day: 'numeric' })}</span>
+        <span className="block">{new Date(match.match_date).toLocaleTimeString('sv-SE', { timeZone: 'Europe/Stockholm', hour: '2-digit', minute: '2-digit' })}</span>
       </span>
       <span className="flex-1 text-right font-medium">{match.home_team}</span>
       <div className="flex items-center gap-1">
