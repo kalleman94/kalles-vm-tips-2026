@@ -32,8 +32,8 @@ export const DEFAULT_RULES = `<h2>🏆 Kalles VM-tips 2026 – Spelregler</h2>
 <p><strong>Extra bonuspoäng</strong> delas ut om du tippar rätt vinnare i de tre sista rundorna:</p>
 <table>
   <tr><th>Omgång</th><th>Bonuspoäng för rätt vinnare</th></tr>
-  <tr><td>Omgång 32</td><td>–</td></tr>
-  <tr><td>Omgång 16</td><td>–</td></tr>
+  <tr><td>Sextondelsfinal</td><td>–</td></tr>
+  <tr><td>Åttondelsfinal</td><td>–</td></tr>
   <tr><td>Kvartsfinal</td><td>–</td></tr>
   <tr><td><strong>Semifinal</strong></td><td><strong>+6p</strong></td></tr>
   <tr><td><strong>Bronsmatch</strong></td><td><strong>+8p</strong></td></tr>

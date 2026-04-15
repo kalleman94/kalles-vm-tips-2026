@@ -109,7 +109,7 @@ export default function TipsPage() {
     phase === 'group' ? lockStatus?.groupLocked : lockStatus?.knockoutLocked
 
   const phaseLabel: Record<string, string> = {
-    r32: 'Omgång 32', r16: 'Omgång 16', qf: 'Kvartsfinal',
+    r32: 'Sextondelsfinal', r16: 'Åttondelsfinal', qf: 'Kvartsfinal',
     sf: 'Semifinal', bronze: 'Bronsmatch', final: 'Final'
   }
 

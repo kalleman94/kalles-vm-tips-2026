@@ -207,7 +207,7 @@ export default function AdminPage() {
   const groupMatches = matches.filter(m => m.phase === 'group')
   const knockoutMatches = matches.filter(m => m.phase !== 'group')
   const phaseLabel: Record<string, string> = {
-    r32: 'R32', r16: 'R16', qf: 'Kvartsfinal', sf: 'Semifinal', bronze: 'Bronsmatch', final: 'Final'
+    r32: 'Sextondelsfinal', r16: 'Åttondelsfinal', qf: 'Kvartsfinal', sf: 'Semifinal', bronze: 'Bronsmatch', final: 'Final'
   }
 
   if (!user) {
