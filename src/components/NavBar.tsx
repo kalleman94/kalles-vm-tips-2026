@@ -34,13 +34,7 @@ export default function NavBar() {
                 {l.label}
               </Link>
             ))}
-            <Link
-              href="/admin"
-              className="ml-2 px-3 py-1.5 rounded text-sm font-medium bg-red-700 hover:bg-red-600 transition-colors"
-            >
-              Admin
-            </Link>
-          </div>
+            </div>
         </div>
 
         {/* Mobil-rad: alltid synlig */}
@@ -56,12 +50,6 @@ export default function NavBar() {
               {l.label}
             </Link>
           ))}
-          <Link
-            href="/admin"
-            className="px-3 py-1.5 rounded text-sm font-medium bg-red-700 hover:bg-red-600 transition-colors"
-          >
-            Admin
-          </Link>
         </div>
       </div>
     </nav>
