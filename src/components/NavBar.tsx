@@ -15,14 +15,20 @@ export default function NavBar() {
   return (
     <nav style={{ backgroundColor: 'var(--color-primary)' }} className="text-white shadow-md">
       <div className="container mx-auto px-4 max-w-5xl">
-        {/* Logotyp + desktop-nav */}
-        <div className="flex items-center justify-between h-14">
+
+        {/* Mobil: centrerad rubrik */}
+        <div className="flex md:hidden items-center justify-center h-12">
           <Link href="/" className="font-bold text-lg tracking-tight text-white">
             🏆 VM-Tips 2026
           </Link>
+        </div>
 
-          {/* Desktop */}
-          <div className="hidden md:flex items-center gap-1">
+        {/* Desktop: logo vänster + länkar höger */}
+        <div className="hidden md:flex items-center justify-between h-14">
+          <Link href="/" className="font-bold text-lg tracking-tight text-white">
+            🏆 VM-Tips 2026
+          </Link>
+          <div className="flex items-center gap-1">
             {links.map(l => (
               <Link
                 key={l.href}
@@ -34,16 +40,16 @@ export default function NavBar() {
                 {l.label}
               </Link>
             ))}
-            </div>
+          </div>
         </div>
 
-        {/* Mobil-rad: alltid synlig */}
-        <div className="md:hidden flex flex-wrap gap-1 pb-2">
+        {/* Mobil: alla flikar på en rad, centrerade */}
+        <div className="md:hidden flex justify-center gap-1 pb-2 overflow-x-auto">
           {links.map(l => (
             <Link
               key={l.href}
               href={l.href}
-              className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+              className={`whitespace-nowrap px-2 py-1 rounded text-xs font-medium transition-colors ${
                 pathname === l.href ? 'bg-white/20' : 'hover:bg-white/10'
               }`}
             >
@@ -51,6 +57,7 @@ export default function NavBar() {
             </Link>
           ))}
         </div>
+
       </div>
     </nav>
   )
