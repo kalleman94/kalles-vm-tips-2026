@@ -265,43 +265,55 @@ function MatchRow({
   showWinner?: boolean
 }) {
   return (
-    <div className="px-4 py-3 flex items-center gap-3 flex-wrap text-sm">
-      <span className="text-gray-400 w-24 shrink-0 text-xs leading-tight">
-        <span className="block">{new Date(match.match_date).toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm', month: 'short', day: 'numeric' })}</span>
-        <span className="block">{new Date(match.match_date).toLocaleTimeString('sv-SE', { timeZone: 'Europe/Stockholm', hour: '2-digit', minute: '2-digit' })}</span>
-      </span>
-      <span className="flex-1 text-right font-medium">{match.home_team}</span>
-      <div className="flex items-center gap-1">
-        <input
-          type="number" min={0} max={20}
-          value={pred?.home_goals ?? ''}
-          onChange={e => onChangePred('home_goals', e.target.value)}
-          disabled={locked}
-          className="w-12 text-center border border-gray-300 rounded px-1 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50 disabled:text-gray-400"
-        />
-        <span className="text-gray-400">–</span>
-        <input
-          type="number" min={0} max={20}
-          value={pred?.away_goals ?? ''}
-          onChange={e => onChangePred('away_goals', e.target.value)}
-          disabled={locked}
-          className="w-12 text-center border border-gray-300 rounded px-1 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50 disabled:text-gray-400"
-        />
-      </div>
-      <span className="flex-1 font-medium">{match.away_team}</span>
-      {showWinner && (
-        <div className="w-full pl-24 mt-1">
-          <label className="text-xs text-gray-500 mr-2">Vinnare:</label>
-          <input
-            type="text"
-            value={pred?.predicted_winner ?? ''}
-            onChange={e => onChangePred('predicted_winner', e.target.value)}
-            disabled={locked}
-            placeholder="Lagnamn"
-            className="border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50 disabled:text-gray-400 w-32"
-          />
+    <div className="px-4 py-3 text-sm">
+      <div className="flex items-start gap-3">
+        <span className="text-gray-400 w-24 shrink-0 text-xs leading-tight pt-0.5">
+          <span className="block">{new Date(match.match_date).toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm', month: 'short', day: 'numeric' })}</span>
+          <span className="block">{new Date(match.match_date).toLocaleTimeString('sv-SE', { timeZone: 'Europe/Stockholm', hour: '2-digit', minute: '2-digit' })}</span>
+        </span>
+        <div className="flex-1">
+          {/* Mobil: lagnamn på rad ovanför */}
+          <div className="flex gap-2 mb-2 sm:hidden">
+            <span className="font-medium flex-1 min-w-0 truncate">{match.home_team}</span>
+            <span className="font-medium flex-1 min-w-0 truncate text-right">{match.away_team}</span>
+          </div>
+          {/* Resultatrad */}
+          <div className="flex items-center gap-3">
+            <span className="hidden sm:block flex-1 text-right font-medium">{match.home_team}</span>
+            <div className="flex items-center gap-1 mx-auto sm:mx-0">
+              <input
+                type="number" min={0} max={20}
+                value={pred?.home_goals ?? ''}
+                onChange={e => onChangePred('home_goals', e.target.value)}
+                disabled={locked}
+                className="w-12 text-center border border-gray-300 rounded px-1 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50 disabled:text-gray-400"
+              />
+              <span className="text-gray-400">–</span>
+              <input
+                type="number" min={0} max={20}
+                value={pred?.away_goals ?? ''}
+                onChange={e => onChangePred('away_goals', e.target.value)}
+                disabled={locked}
+                className="w-12 text-center border border-gray-300 rounded px-1 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50 disabled:text-gray-400"
+              />
+            </div>
+            <span className="hidden sm:block flex-1 font-medium">{match.away_team}</span>
+          </div>
+          {showWinner && (
+            <div className="mt-2 flex items-center gap-2">
+              <label className="text-xs text-gray-500">Vinnare:</label>
+              <input
+                type="text"
+                value={pred?.predicted_winner ?? ''}
+                onChange={e => onChangePred('predicted_winner', e.target.value)}
+                disabled={locked}
+                placeholder="Lagnamn"
+                className="border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50 disabled:text-gray-400 w-32"
+              />
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   )
 }

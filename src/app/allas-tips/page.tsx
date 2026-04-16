@@ -111,16 +111,26 @@ export default function AllasTipsPage() {
                       {groupMatches.filter(m => m.group_name === g).map(m => {
                         const p = predMap[m.id]
                         return (
-                          <div key={m.id} className="px-4 py-2 flex items-center gap-3 text-sm">
-                            <span className="text-gray-400 w-24 shrink-0 text-xs leading-tight">
-                              <span className="block">{new Date(m.match_date).toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm', month: 'short', day: 'numeric' })}</span>
-                              <span className="block">{new Date(m.match_date).toLocaleTimeString('sv-SE', { timeZone: 'Europe/Stockholm', hour: '2-digit', minute: '2-digit' })}</span>
-                            </span>
-                            <span className="flex-1 text-right">{m.home_team}</span>
-                            <span className="font-mono font-bold w-12 text-center">
-                              {p ? `${p.home_goals ?? '?'} – ${p.away_goals ?? '?'}` : '? – ?'}
-                            </span>
-                            <span className="flex-1">{m.away_team}</span>
+                          <div key={m.id} className="px-4 py-2 text-sm">
+                            <div className="flex items-start gap-3">
+                              <span className="text-gray-400 w-24 shrink-0 text-xs leading-tight pt-0.5">
+                                <span className="block">{new Date(m.match_date).toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm', month: 'short', day: 'numeric' })}</span>
+                                <span className="block">{new Date(m.match_date).toLocaleTimeString('sv-SE', { timeZone: 'Europe/Stockholm', hour: '2-digit', minute: '2-digit' })}</span>
+                              </span>
+                              <div className="flex-1">
+                                <div className="flex gap-2 mb-1 sm:hidden">
+                                  <span className="flex-1 min-w-0 truncate">{m.home_team}</span>
+                                  <span className="flex-1 min-w-0 truncate text-right">{m.away_team}</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <span className="hidden sm:block flex-1 text-right">{m.home_team}</span>
+                                  <span className="font-mono font-bold w-12 text-center mx-auto sm:mx-0">
+                                    {p ? `${p.home_goals ?? '?'} – ${p.away_goals ?? '?'}` : '? – ?'}
+                                  </span>
+                                  <span className="hidden sm:block flex-1">{m.away_team}</span>
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         )
                       })}
@@ -138,16 +148,28 @@ export default function AllasTipsPage() {
                       {knockoutMatches.map(m => {
                         const p = predMap[m.id]
                         return (
-                          <div key={m.id} className="px-4 py-2 flex items-center gap-3 text-sm">
-                            <span className="text-gray-400 w-20 shrink-0 text-xs capitalize">{m.phase}</span>
-                            <span className="flex-1 text-right">{m.home_team}</span>
-                            <span className="font-mono font-bold w-12 text-center">
-                              {p ? `${p.home_goals ?? '?'} – ${p.away_goals ?? '?'}` : '? – ?'}
-                            </span>
-                            <span className="flex-1">{m.away_team}</span>
-                            {p?.predicted_winner && (
-                              <span className="text-xs text-gray-500">→ {p.predicted_winner}</span>
-                            )}
+                          <div key={m.id} className="px-4 py-2 text-sm">
+                            <div className="flex items-start gap-3">
+                              <span className="text-gray-400 w-20 shrink-0 text-xs capitalize pt-0.5">{m.phase}</span>
+                              <div className="flex-1">
+                                <div className="flex gap-2 mb-1 sm:hidden">
+                                  <span className="flex-1 min-w-0 truncate">{m.home_team}</span>
+                                  <span className="flex-1 min-w-0 truncate text-right">{m.away_team}</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <span className="hidden sm:block flex-1 text-right">{m.home_team}</span>
+                                  <span className="font-mono font-bold w-12 text-center mx-auto sm:mx-0">
+                                    {p ? `${p.home_goals ?? '?'} – ${p.away_goals ?? '?'}` : '? – ?'}
+                                  </span>
+                                  <span className="hidden sm:block flex-1">{m.away_team}</span>
+                                </div>
+                                {p?.predicted_winner && (
+                                  <div className="mt-1 text-xs text-gray-500 text-center sm:text-left sm:pl-[calc(33.333%+0.75rem)]">
+                                    → {p.predicted_winner}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           </div>
                         )
                       })}
