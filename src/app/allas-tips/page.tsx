@@ -2,7 +2,7 @@
 export const dynamic = 'force-dynamic'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { Participant, Match, Prediction, BonusAnswers } from '@/lib/types'
+import { Participant, Match, Prediction, BonusAnswers, MatchResult, DEFAULT_POINTS } from '@/lib/types'
 
 export default function AllasTipsPage() {
   const supabase = createClient()
@@ -11,6 +11,7 @@ export default function AllasTipsPage() {
   const [matches, setMatches] = useState<Match[]>([])
   const [predictions, setPredictions] = useState<Prediction[]>([])
   const [bonus, setBonus] = useState<BonusAnswers | null>(null)
+  const [results, setResults] = useState<Record<number, MatchResult>>({})
   const [loading, setLoading] = useState(true)
   const [loadingTips, setLoadingTips] = useState(false)
 
@@ -21,6 +22,13 @@ export default function AllasTipsPage() {
     })
     supabase.from('matches').select('*').order('match_date').then(({ data }: { data: any }) => {
       if (data) setMatches(data)
+    })
+    supabase.from('match_results').select('*').then(({ data }: { data: any }) => {
+      if (data) {
+        const map: Record<number, MatchResult> = {}
+        data.forEach((r: MatchResult) => { map[r.match_id] = r })
+        setResults(map)
+      }
     })
   }, [])
 
@@ -124,10 +132,16 @@ export default function AllasTipsPage() {
                                 </div>
                                 <div className="flex items-center gap-3">
                                   <span className="hidden sm:block flex-1 text-right">{m.home_team}</span>
-                                  <span className="font-mono font-bold w-12 text-center mx-auto sm:mx-0">
+                                  <span className="font-mono font-bold w-12 text-center">
                                     {p ? `${p.home_goals ?? '?'} – ${p.away_goals ?? '?'}` : '? – ?'}
                                   </span>
-                                  <span className="hidden sm:block flex-1">{m.away_team}</span>
+                                  <div className="hidden sm:flex flex-1 items-center gap-2">
+                                    <span>{m.away_team}</span>
+                                    <PointsBadge info={getMatchPointInfo(p, results[m.id], m)} />
+                                  </div>
+                                  <div className="flex-1 flex justify-end sm:hidden">
+                                    <PointsBadge info={getMatchPointInfo(p, results[m.id], m)} />
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -158,10 +172,16 @@ export default function AllasTipsPage() {
                                 </div>
                                 <div className="flex items-center gap-3">
                                   <span className="hidden sm:block flex-1 text-right">{m.home_team}</span>
-                                  <span className="font-mono font-bold w-12 text-center mx-auto sm:mx-0">
+                                  <span className="font-mono font-bold w-12 text-center">
                                     {p ? `${p.home_goals ?? '?'} – ${p.away_goals ?? '?'}` : '? – ?'}
                                   </span>
-                                  <span className="hidden sm:block flex-1">{m.away_team}</span>
+                                  <div className="hidden sm:flex flex-1 items-center gap-2">
+                                    <span>{m.away_team}</span>
+                                    <PointsBadge info={getMatchPointInfo(p, results[m.id], m)} />
+                                  </div>
+                                  <div className="flex-1 flex justify-end sm:hidden">
+                                    <PointsBadge info={getMatchPointInfo(p, results[m.id], m)} />
+                                  </div>
                                 </div>
                                 {p?.predicted_winner && (
                                   <div className="mt-1 text-xs text-gray-500 text-center sm:text-left sm:pl-[calc(33.333%+0.75rem)]">
@@ -183,4 +203,38 @@ export default function AllasTipsPage() {
       )}
     </div>
   )
+}
+
+function getMatchPointInfo(
+  pred: Prediction | undefined,
+  result: MatchResult | undefined,
+  match: Match
+): { points: number; exact: boolean } | null {
+  if (!result) return null
+  if (!pred || pred.home_goals === null || pred.home_goals === undefined ||
+      pred.away_goals === null || pred.away_goals === undefined) return { points: 0, exact: false }
+  const sign = (h: number, a: number) => h > a ? '1' : h === a ? 'X' : '2'
+  let points = 0
+  const homeCorrect = pred.home_goals === result.home_goals
+  const awayCorrect = pred.away_goals === result.away_goals
+  if (homeCorrect) points += DEFAULT_POINTS.correct_home_goals
+  if (awayCorrect) points += DEFAULT_POINTS.correct_away_goals
+  if (sign(pred.home_goals, pred.away_goals) === sign(result.home_goals, result.away_goals))
+    points += DEFAULT_POINTS.correct_sign
+  if (match.phase !== 'group' && pred.predicted_winner && result.winner &&
+      pred.predicted_winner === result.winner) {
+    const bonus: Record<string, number> = {
+      r32: DEFAULT_POINTS.r32_team, r16: DEFAULT_POINTS.r16_team, qf: DEFAULT_POINTS.qf_team,
+      sf: DEFAULT_POINTS.sf_team, bronze: DEFAULT_POINTS.bronze_team, final: DEFAULT_POINTS.final_team,
+    }
+    points += bonus[match.phase] ?? 0
+  }
+  return { points, exact: homeCorrect && awayCorrect }
+}
+
+function PointsBadge({ info }: { info: { points: number; exact: boolean } | null }) {
+  if (!info) return null
+  if (info.points === 0) return <span className="text-xs font-bold text-red-500 shrink-0">✗ 0p</span>
+  if (info.exact) return <span className="text-xs font-bold text-green-600 shrink-0">✓ {info.points}p</span>
+  return <span className="text-xs font-bold text-orange-500 shrink-0">~ {info.points}p</span>
 }

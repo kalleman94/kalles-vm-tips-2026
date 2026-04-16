@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { getLockStatus } from '@/lib/lock'
-import { Match, Prediction, BonusAnswers, LockStatus } from '@/lib/types'
+import { Match, Prediction, BonusAnswers, LockStatus, MatchResult, DEFAULT_POINTS } from '@/lib/types'
 
 const PHASES_GROUP = 'group'
 const PHASES_KNOCKOUT = ['r32', 'r16', 'qf', 'sf', 'bronze', 'final']
@@ -17,6 +17,7 @@ export default function TipsPage() {
   const [participantName, setParticipantName] = useState('')
   const [matches, setMatches] = useState<Match[]>([])
   const [predictions, setPredictions] = useState<Record<number, Partial<Prediction>>>({})
+  const [results, setResults] = useState<Record<number, MatchResult>>({})
   const [bonus, setBonus] = useState<Partial<BonusAnswers>>({})
   const [lockStatus, setLockStatus] = useState<LockStatus | null>(null)
   const [knockoutEnabled, setKnockoutEnabled] = useState(false)
@@ -51,10 +52,11 @@ export default function TipsPage() {
   }, [])
 
   async function loadData(pid: string) {
-    const [{ data: matchData }, { data: predData }, { data: bonusData }] = await Promise.all([
+    const [{ data: matchData }, { data: predData }, { data: bonusData }, { data: resultData }] = await Promise.all([
       supabase.from('matches').select('*').order('match_date'),
       supabase.from('predictions').select('*').eq('participant_id', pid),
       supabase.from('bonus_answers').select('*').eq('participant_id', pid).maybeSingle(),
+      supabase.from('match_results').select('*'),
     ])
     if (matchData) setMatches(matchData)
     if (predData) {
@@ -63,6 +65,11 @@ export default function TipsPage() {
       setPredictions(map)
     }
     if (bonusData) setBonus(bonusData)
+    if (resultData) {
+      const map: Record<number, MatchResult> = {}
+      resultData.forEach((r: MatchResult) => { map[r.match_id] = r })
+      setResults(map)
+    }
   }
 
   function setPred(matchId: number, field: 'home_goals' | 'away_goals' | 'predicted_winner', value: string) {
@@ -167,7 +174,7 @@ export default function TipsPage() {
               </div>
               <div className="divide-y">
                 {groupMatches.filter(m => m.group_name === g).map(m => (
-                  <MatchRow key={m.id} match={m} pred={predictions[m.id]} locked={!!lockStatus?.groupLocked}
+                  <MatchRow key={m.id} match={m} pred={predictions[m.id]} result={results[m.id]} locked={!!lockStatus?.groupLocked}
                     onChangePred={(field, val) => setPred(m.id, field, val)} />
                 ))}
               </div>
@@ -240,7 +247,7 @@ export default function TipsPage() {
                     </div>
                     <div className="divide-y">
                       {phaseMatches.map(m => (
-                        <MatchRow key={m.id} match={m} pred={predictions[m.id]} locked={!!lockStatus?.knockoutLocked}
+                        <MatchRow key={m.id} match={m} pred={predictions[m.id]} result={results[m.id]} locked={!!lockStatus?.knockoutLocked}
                           onChangePred={(field, val) => setPred(m.id, field, val)} showWinner />
                       ))}
                     </div>
@@ -256,14 +263,16 @@ export default function TipsPage() {
 }
 
 function MatchRow({
-  match, pred, locked, onChangePred, showWinner = false
+  match, pred, result, locked, onChangePred, showWinner = false
 }: {
   match: Match
   pred?: Partial<Prediction>
+  result?: MatchResult
   locked: boolean
   onChangePred: (field: 'home_goals' | 'away_goals' | 'predicted_winner', val: string) => void
   showWinner?: boolean
 }) {
+  const info = getMatchPointInfo(pred, result, match)
   return (
     <div className="px-4 py-3 text-sm">
       <div className="flex items-start gap-3">
@@ -280,7 +289,7 @@ function MatchRow({
           {/* Resultatrad */}
           <div className="flex items-center gap-3">
             <span className="hidden sm:block flex-1 text-right font-medium">{match.home_team}</span>
-            <div className="flex items-center gap-1 mx-auto sm:mx-0">
+            <div className="flex items-center gap-1">
               <input
                 type="number" min={0} max={20}
                 value={pred?.home_goals ?? ''}
@@ -297,7 +306,13 @@ function MatchRow({
                 className="w-12 text-center border border-gray-300 rounded px-1 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50 disabled:text-gray-400"
               />
             </div>
-            <span className="hidden sm:block flex-1 font-medium">{match.away_team}</span>
+            <div className="hidden sm:flex flex-1 items-center gap-2">
+              <span className="font-medium">{match.away_team}</span>
+              <PointsBadge info={info} />
+            </div>
+            <div className="flex-1 flex justify-end sm:hidden">
+              <PointsBadge info={info} />
+            </div>
           </div>
           {showWinner && (
             <div className="mt-2 flex items-center gap-2">
@@ -316,4 +331,38 @@ function MatchRow({
       </div>
     </div>
   )
+}
+
+function getMatchPointInfo(
+  pred: Partial<Prediction> | undefined,
+  result: MatchResult | undefined,
+  match: Match
+): { points: number; exact: boolean } | null {
+  if (!result) return null
+  if (!pred || pred.home_goals === null || pred.home_goals === undefined ||
+      pred.away_goals === null || pred.away_goals === undefined) return { points: 0, exact: false }
+  const sign = (h: number, a: number) => h > a ? '1' : h === a ? 'X' : '2'
+  let points = 0
+  const homeCorrect = pred.home_goals === result.home_goals
+  const awayCorrect = pred.away_goals === result.away_goals
+  if (homeCorrect) points += DEFAULT_POINTS.correct_home_goals
+  if (awayCorrect) points += DEFAULT_POINTS.correct_away_goals
+  if (sign(pred.home_goals, pred.away_goals) === sign(result.home_goals, result.away_goals))
+    points += DEFAULT_POINTS.correct_sign
+  if (match.phase !== 'group' && pred.predicted_winner && result.winner &&
+      pred.predicted_winner === result.winner) {
+    const bonus: Record<string, number> = {
+      r32: DEFAULT_POINTS.r32_team, r16: DEFAULT_POINTS.r16_team, qf: DEFAULT_POINTS.qf_team,
+      sf: DEFAULT_POINTS.sf_team, bronze: DEFAULT_POINTS.bronze_team, final: DEFAULT_POINTS.final_team,
+    }
+    points += bonus[match.phase] ?? 0
+  }
+  return { points, exact: homeCorrect && awayCorrect }
+}
+
+function PointsBadge({ info }: { info: { points: number; exact: boolean } | null }) {
+  if (!info) return null
+  if (info.points === 0) return <span className="text-xs font-bold text-red-500 shrink-0">✗ 0p</span>
+  if (info.exact) return <span className="text-xs font-bold text-green-600 shrink-0">✓ {info.points}p</span>
+  return <span className="text-xs font-bold text-orange-500 shrink-0">~ {info.points}p</span>
 }
