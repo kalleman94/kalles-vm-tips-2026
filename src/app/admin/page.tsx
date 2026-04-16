@@ -142,12 +142,17 @@ export default function AdminPage() {
     const r = results[matchId]
     if (r.home === '' || r.away === '') return
     setSaving(matchId)
-    await supabase.from('match_results').upsert(
+    const { error } = await supabase.from('match_results').upsert(
       { match_id: matchId, home_goals: Number(r.home), away_goals: Number(r.away), winner: r.winner || null },
       { onConflict: 'match_id' }
     )
-    await fetch('/api/recalculate', { method: 'POST' })
     setSaving(null)
+    if (error) {
+      alert('Kunde inte spara resultat: ' + error.message)
+      return
+    }
+    await fetch('/api/recalculate', { method: 'POST' })
+    await loadMatches()
     setSavedIds(prev => [...prev, matchId])
     setTimeout(() => setSavedIds(prev => prev.filter(id => id !== matchId)), 3000)
   }
