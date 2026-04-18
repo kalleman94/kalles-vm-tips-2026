@@ -182,6 +182,39 @@ export default function TipsPage() {
               </div>
             </div>
           ))}
+
+          {/* Bonus questions inline at bottom of group tab */}
+          <div className="bg-white rounded-xl shadow overflow-hidden">
+            <div className="px-4 py-2 text-sm font-bold text-white" style={{ backgroundColor: 'var(--color-primary)' }}>
+              🏆 Bonusfrågor
+            </div>
+            <div className="p-4 space-y-4">
+              {lockStatus?.bonusLocked && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-amber-800 text-sm">
+                  🔒 Bonusfrågor är låsta.
+                </div>
+              )}
+              {[
+                { key: 'champion', label: '🏆 Världsmästare', points: '20 p' },
+                { key: 'top_scorer', label: '⚽ Skyttekung', points: '20 p' },
+                { key: 'third_place', label: '🥉 Vinnare bronsmatch', points: '10 p' },
+              ].map(({ key, label, points }) => (
+                <div key={key}>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {label} <span className="text-gray-400 font-normal">({points})</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={(bonus as any)[key] ?? ''}
+                    onChange={e => setBonus(prev => ({ ...prev, [key]: e.target.value }))}
+                    disabled={!!lockStatus?.bonusLocked}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
+                    placeholder="Lagnamn eller spelarnamn"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
