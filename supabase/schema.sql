@@ -105,8 +105,9 @@ CREATE POLICY "participants_select" ON participants FOR SELECT USING (true);
 CREATE POLICY "participants_insert" ON participants FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 CREATE POLICY "participants_update" ON participants FOR UPDATE USING (auth.role() = 'authenticated');
 
--- Matches: readable by all
+-- Matches: readable by all, writable by authenticated (admin)
 CREATE POLICY "matches_select" ON matches FOR SELECT USING (true);
+CREATE POLICY "matches_write" ON matches FOR ALL USING (auth.role() = 'authenticated');
 
 -- Match results: readable by all, writable by authenticated
 CREATE POLICY "match_results_select" ON match_results FOR SELECT USING (true);
