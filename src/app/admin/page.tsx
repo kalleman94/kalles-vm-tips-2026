@@ -40,6 +40,15 @@ export default function AdminPage() {
   const [groupResultsOpen, setGroupResultsOpen] = useState(false)
   const [knockoutResultsOpen, setKnockoutResultsOpen] = useState(false)
   const [contentOpen, setContentOpen] = useState(false)
+  const [participantsOpen, setParticipantsOpen] = useState(false)
+
+  // Participant management
+  const [participantList, setParticipantList] = useState<{ id: string; name: string; pin_hash: string; total_points: number; group_points: number; knockout_points: number; bonus_points: number }[]>([])
+  const [deletingParticipantId, setDeletingParticipantId] = useState<string | null>(null)
+  const [scoreEdits, setScoreEdits] = useState<Record<string, { total: string; group: string; knockout: string; bonus: string }>>({})
+  const [savingScore, setSavingScore] = useState<string | null>(null)
+  const [savedScoreIds, setSavedScoreIds] = useState<string[]>([])
+  const [clearingType, setClearingType] = useState<string | null>(null)
 
   // Content editing
   const [infoBoxContent, setInfoBoxContent] = useState('')
@@ -54,6 +63,7 @@ export default function AdminPage() {
         setUser(data.user)
         loadMatches()
         loadSettings()
+        loadParticipants()
       }
     })
   }, [])
@@ -188,7 +198,71 @@ export default function AdminPage() {
     setTimeout(() => setParticipantMsg(''), 4000)
   }
 
-  async function saveInfoBox(e: React.FormEvent) {
+  async function loadParticipants() {
+    const [{ data: pData }, { data: sData }] = await Promise.all([
+      supabase.from('participants').select('id, name, pin_hash').order('name'),
+      supabase.from('scores').select('*'),
+    ])
+    if (!pData) return
+    const scoreMap: Record<string, any> = {}
+    sData?.forEach((s: any) => { scoreMap[s.participant_id] = s })
+    const list = pData.map((p: any) => ({
+      id: p.id, name: p.name, pin_hash: p.pin_hash,
+      total_points: scoreMap[p.id]?.total_points ?? 0,
+      group_points: scoreMap[p.id]?.group_points ?? 0,
+      knockout_points: scoreMap[p.id]?.knockout_points ?? 0,
+      bonus_points: scoreMap[p.id]?.bonus_points ?? 0,
+    }))
+    setParticipantList(list)
+    const edits: Record<string, { total: string; group: string; knockout: string; bonus: string }> = {}
+    list.forEach((p: any) => {
+      edits[p.id] = { total: String(p.total_points), group: String(p.group_points), knockout: String(p.knockout_points), bonus: String(p.bonus_points) }
+    })
+    setScoreEdits(edits)
+  }
+
+  async function deleteParticipant(id: string, name: string) {
+    if (!confirm(`Är du säker på att du vill ta bort ${name} och all deras data?`)) return
+    setDeletingParticipantId(id)
+    await supabase.from('participants').delete().eq('id', id)
+    setDeletingParticipantId(null)
+    loadParticipants()
+  }
+
+  async function saveScore(participantId: string) {
+    const e = scoreEdits[participantId]
+    if (!e) return
+    setSavingScore(participantId)
+    const total = Number(e.total), group = Number(e.group), knockout = Number(e.knockout), bonus = Number(e.bonus)
+    await supabase.from('scores').upsert(
+      { participant_id: participantId, total_points: total, group_points: group, knockout_points: knockout, bonus_points: bonus },
+      { onConflict: 'participant_id' }
+    )
+    setSavingScore(null)
+    setSavedScoreIds(prev => [...prev, participantId])
+    setTimeout(() => setSavedScoreIds(prev => prev.filter(id => id !== participantId)), 3000)
+    loadParticipants()
+  }
+
+  async function clearResults() {
+    if (!confirm('Rensa ALLA inmatade matchresultat? Detta går inte att ångra.')) return
+    setClearingType('results')
+    await supabase.from('match_results').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    await fetch('/api/recalculate', { method: 'POST' })
+    await loadMatches()
+    await loadParticipants()
+    setClearingType(null)
+  }
+
+  async function clearPredictions() {
+    if (!confirm('Rensa ALLA användartips och bonussvar? Detta går inte att ångra.')) return
+    setClearingType('predictions')
+    await supabase.from('predictions').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    await supabase.from('bonus_answers').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    await fetch('/api/recalculate', { method: 'POST' })
+    await loadParticipants()
+    setClearingType(null)
+  }
     e.preventDefault()
     setSavingContent('info')
     await Promise.all([
@@ -303,6 +377,25 @@ export default function AdminPage() {
             <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
               knockoutEnabled ? 'translate-x-6' : 'translate-x-1'
             }`} />
+          </button>
+        </div>
+
+        {/* Reset buttons */}
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 mt-4">Farliga åtgärder</p>
+        <div className="flex gap-3 flex-wrap">
+          <button
+            onClick={clearResults}
+            disabled={clearingType !== null}
+            className="px-4 py-2 rounded-lg text-white text-sm font-medium disabled:opacity-50 bg-orange-500 hover:bg-orange-600 transition-colors"
+          >
+            {clearingType === 'results' ? 'Rensar...' : '🗑️ Rensa matchresultat'}
+          </button>
+          <button
+            onClick={clearPredictions}
+            disabled={clearingType !== null}
+            className="px-4 py-2 rounded-lg text-white text-sm font-medium disabled:opacity-50 bg-red-600 hover:bg-red-700 transition-colors"
+          >
+            {clearingType === 'predictions' ? 'Rensar...' : '🗑️ Rensa användartips'}
           </button>
         </div>
 
@@ -429,6 +522,79 @@ export default function AdminPage() {
                 {savingContent === 'rules' ? 'Sparar...' : 'Spara regler'}
               </button>
             </form>
+          </div>
+        )}
+      </div>
+
+      {/* Participant management */}
+      <div className="bg-white rounded-xl shadow overflow-hidden mb-8">
+        <button
+          onClick={() => { setParticipantsOpen(o => !o); if (!participantsOpen) loadParticipants() }}
+          className="w-full flex items-center justify-between px-4 py-3 text-sm font-bold text-white"
+          style={{ backgroundColor: 'var(--color-primary)' }}
+        >
+          <span>👥 Hantera deltagare</span>
+          <span className="text-white text-base">{participantsOpen ? '▲' : '▼'}</span>
+        </button>
+        {participantsOpen && (
+          <div className="p-4">
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 mb-4">
+              ⚠️ Manuella poängjusteringar skrivs över om du kör "beräkna poäng" igen.
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-gray-500 border-b">
+                    <th className="pb-2 pr-3">Namn</th>
+                    <th className="pb-2 pr-3">PIN</th>
+                    <th className="pb-2 pr-2 text-center">Grupp</th>
+                    <th className="pb-2 pr-2 text-center">Slutspel</th>
+                    <th className="pb-2 pr-2 text-center">Bonus</th>
+                    <th className="pb-2 pr-2 text-center">Totalt</th>
+                    <th className="pb-2"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {participantList.map(p => {
+                    const e = scoreEdits[p.id] ?? { total: '0', group: '0', knockout: '0', bonus: '0' }
+                    const saved = savedScoreIds.includes(p.id)
+                    return (
+                      <tr key={p.id} className="text-xs">
+                        <td className="py-2 pr-3 font-medium">{p.name}</td>
+                        <td className="py-2 pr-3 font-mono text-gray-500">{p.pin_hash}</td>
+                        {(['group', 'knockout', 'bonus', 'total'] as const).map(field => (
+                          <td key={field} className="py-2 pr-2">
+                            <input
+                              type="number"
+                              value={e[field === 'group' ? 'group' : field === 'knockout' ? 'knockout' : field === 'bonus' ? 'bonus' : 'total']}
+                              onChange={ev => setScoreEdits(prev => ({ ...prev, [p.id]: { ...prev[p.id], [field === 'group' ? 'group' : field === 'knockout' ? 'knockout' : field === 'bonus' ? 'bonus' : 'total']: ev.target.value } }))}
+                              className="w-14 text-center border border-gray-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                            />
+                          </td>
+                        ))}
+                        <td className="py-2 flex gap-1">
+                          <button
+                            onClick={() => saveScore(p.id)}
+                            disabled={savingScore === p.id}
+                            className="px-2 py-1 rounded text-white text-xs font-medium disabled:opacity-50 transition-colors"
+                            style={{ backgroundColor: saved ? 'var(--color-green)' : 'var(--color-primary)' }}
+                          >
+                            {savingScore === p.id ? '...' : saved ? '✓' : 'Spara'}
+                          </button>
+                          <button
+                            onClick={() => deleteParticipant(p.id, p.name)}
+                            disabled={deletingParticipantId === p.id}
+                            className="px-2 py-1 rounded text-white text-xs font-medium bg-red-500 hover:bg-red-600 disabled:opacity-50 transition-colors"
+                          >
+                            {deletingParticipantId === p.id ? '...' : '🗑️'}
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>
