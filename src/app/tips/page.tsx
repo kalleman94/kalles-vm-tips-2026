@@ -1,6 +1,6 @@
 'use client'
 export const dynamic = 'force-dynamic'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { getLockStatus } from '@/lib/lock'
@@ -8,6 +8,68 @@ import { Match, Prediction, BonusAnswers, LockStatus, MatchResult, DEFAULT_POINT
 
 const PHASES_GROUP = 'group'
 const PHASES_KNOCKOUT = ['r32', 'r16', 'qf', 'sf', 'bronze', 'final']
+
+function isPlaceholder(name: string): boolean {
+  return /^(Vinnare|Tvåa|Bästa|Förlorare)/.test(name)
+}
+
+function buildResolvedTeams(
+  matches: Match[],
+  predictions: Record<number, Partial<Prediction>>
+): Record<number, { home: string; away: string }> {
+  const resolved: Record<number, { home: string; away: string }> = {}
+  matches.forEach(m => { resolved[m.id] = { home: m.home_team, away: m.away_team } })
+
+  const byPhase = (phase: string) =>
+    matches.filter(m => m.phase === phase).sort((a, b) => a.match_number - b.match_number)
+
+  const propagate = (fromPhase: string, toPhase: string) => {
+    const from = byPhase(fromPhase)
+    const to = byPhase(toPhase)
+    to.forEach((match, i) => {
+      const srcHome = from[2 * i]
+      const srcAway = from[2 * i + 1]
+      if (srcHome) {
+        const winner = predictions[srcHome.id]?.predicted_winner
+        if (winner && isPlaceholder(resolved[match.id].home))
+          resolved[match.id].home = winner
+      }
+      if (srcAway) {
+        const winner = predictions[srcAway.id]?.predicted_winner
+        if (winner && isPlaceholder(resolved[match.id].away))
+          resolved[match.id].away = winner
+      }
+    })
+  }
+
+  propagate('r32', 'r16')
+  propagate('r16', 'qf')
+  propagate('qf', 'sf')
+
+  const sfMatches = byPhase('sf')
+  const [finalMatch] = byPhase('final')
+  const [bronzeMatch] = byPhase('bronze')
+
+  if (finalMatch && sfMatches.length >= 2) {
+    const w0 = predictions[sfMatches[0].id]?.predicted_winner
+    const w1 = predictions[sfMatches[1].id]?.predicted_winner
+    if (w0 && isPlaceholder(resolved[finalMatch.id].home)) resolved[finalMatch.id].home = w0
+    if (w1 && isPlaceholder(resolved[finalMatch.id].away)) resolved[finalMatch.id].away = w1
+  }
+
+  if (bronzeMatch && sfMatches.length >= 2) {
+    const sf0 = resolved[sfMatches[0].id]
+    const sf1 = resolved[sfMatches[1].id]
+    const w0 = predictions[sfMatches[0].id]?.predicted_winner
+    const w1 = predictions[sfMatches[1].id]?.predicted_winner
+    if (w0 && isPlaceholder(resolved[bronzeMatch.id].home))
+      resolved[bronzeMatch.id].home = w0 === sf0.home ? sf0.away : sf0.home
+    if (w1 && isPlaceholder(resolved[bronzeMatch.id].away))
+      resolved[bronzeMatch.id].away = w1 === sf1.home ? sf1.away : sf1.home
+  }
+
+  return resolved
+}
 
 export default function TipsPage() {
   const router = useRouter()
@@ -111,6 +173,11 @@ export default function TipsPage() {
   const groupMatches = matches.filter(m => m.phase === PHASES_GROUP)
   const knockoutMatches = matches.filter(m => PHASES_KNOCKOUT.includes(m.phase))
   const groups = [...new Set(groupMatches.map(m => m.group_name))].sort()
+
+  const resolvedTeams = useMemo(
+    () => buildResolvedTeams(matches, predictions),
+    [matches, predictions]
+  )
 
   const locked = (phase: string) =>
     phase === 'group' ? lockStatus?.groupLocked : lockStatus?.knockoutLocked
@@ -283,7 +350,9 @@ export default function TipsPage() {
                     <div className="divide-y">
                       {phaseMatches.map(m => (
                         <MatchRow key={m.id} match={m} pred={predictions[m.id]} result={results[m.id]} locked={!!lockStatus?.knockoutLocked}
-                          onChangePred={(field, val) => setPred(m.id, field, val)} showWinner />
+                          onChangePred={(field, val) => setPred(m.id, field, val)} showWinner
+                          resolvedHome={resolvedTeams[m.id]?.home}
+                          resolvedAway={resolvedTeams[m.id]?.away} />
                       ))}
                     </div>
                   </div>
@@ -298,7 +367,7 @@ export default function TipsPage() {
 }
 
 function MatchRow({
-  match, pred, result, locked, onChangePred, showWinner = false
+  match, pred, result, locked, onChangePred, showWinner = false, resolvedHome, resolvedAway
 }: {
   match: Match
   pred?: Partial<Prediction>
@@ -306,7 +375,11 @@ function MatchRow({
   locked: boolean
   onChangePred: (field: 'home_goals' | 'away_goals' | 'predicted_winner', val: string) => void
   showWinner?: boolean
+  resolvedHome?: string
+  resolvedAway?: string
 }) {
+  const homeTeam = resolvedHome ?? match.home_team
+  const awayTeam = resolvedAway ?? match.away_team
   const info = getMatchPointInfo(pred, result, match)
   return (
     <div className="px-4 py-3 text-sm">
@@ -318,12 +391,12 @@ function MatchRow({
         <div className="flex-1">
           {/* Mobil: lagnamn på rad ovanför */}
           <div className="flex gap-2 mb-2 sm:hidden">
-            <span className="font-medium flex-1 min-w-0 truncate">{match.home_team}</span>
-            <span className="font-medium flex-1 min-w-0 truncate text-right">{match.away_team}</span>
+            <span className="font-medium flex-1 min-w-0 truncate">{homeTeam}</span>
+            <span className="font-medium flex-1 min-w-0 truncate text-right">{awayTeam}</span>
           </div>
           {/* Resultatrad */}
           <div className="flex items-center gap-3">
-            <span className="hidden sm:block flex-1 text-right font-medium">{match.home_team}</span>
+            <span className="hidden sm:block flex-1 text-right font-medium">{homeTeam}</span>
             <div className="flex items-center gap-1">
               <input
                 type="number" min={0} max={20}
@@ -342,7 +415,7 @@ function MatchRow({
               />
             </div>
             <div className="hidden sm:flex flex-1 items-center gap-2">
-              <span className="font-medium">{match.away_team}</span>
+              <span className="font-medium">{awayTeam}</span>
               <PointsBadge info={info} />
             </div>
             <div className="flex-1 flex justify-end sm:hidden">
@@ -350,16 +423,27 @@ function MatchRow({
             </div>
           </div>
           {showWinner && (
-            <div className="mt-2 flex items-center gap-2">
-              <label className="text-xs text-gray-500">Vinnare:</label>
-              <input
-                type="text"
-                value={pred?.predicted_winner ?? ''}
-                onChange={e => onChangePred('predicted_winner', e.target.value)}
-                disabled={locked}
-                placeholder="Lagnamn"
-                className="border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50 disabled:text-gray-400 w-32"
-              />
+            <div className="mt-2 flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-gray-500 shrink-0">Vidare:</span>
+              {[homeTeam, awayTeam].map(team => {
+                const selected = pred?.predicted_winner === team
+                return (
+                  <button
+                    key={team}
+                    type="button"
+                    disabled={locked}
+                    onClick={() => onChangePred('predicted_winner', selected ? '' : team)}
+                    className={`px-2 py-1 rounded text-xs font-medium transition-colors border ${
+                      selected
+                        ? 'text-white border-transparent'
+                        : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    style={selected ? { backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-primary)' } : {}}
+                  >
+                    {team}
+                  </button>
+                )
+              })}
             </div>
           )}
         </div>
