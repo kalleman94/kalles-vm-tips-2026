@@ -123,18 +123,20 @@ export default function TipsPage() {
   if (!participantId) return null
 
   return (
-    <div>
-      <div className="mb-6 flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: 'var(--color-primary)' }}>
-            Mina tips
-          </h1>
-          <p className="text-gray-500 text-sm mt-1">Inloggad som <strong>{participantName}</strong></p>
-        </div>
+    <div className="pb-24">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold" style={{ color: 'var(--color-primary)' }}>
+          Mina tips
+        </h1>
+        <p className="text-gray-500 text-sm mt-1">Inloggad som <strong>{participantName}</strong></p>
+      </div>
+
+      {/* Sticky save button */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 flex justify-center px-4 py-3 bg-white/80 backdrop-blur border-t border-gray-200 shadow-lg">
         <button
           onClick={handleSave}
           disabled={saving}
-          className="px-5 py-2 rounded-lg text-white font-medium text-sm transition-colors disabled:opacity-50"
+          className="w-full max-w-sm px-5 py-3 rounded-xl text-white font-semibold text-sm transition-all disabled:opacity-50 shadow-md"
           style={{ backgroundColor: saved ? 'var(--color-green)' : 'var(--color-primary)' }}
         >
           {saving ? 'Sparar...' : saved ? '✓ Sparat!' : 'Spara tips'}
