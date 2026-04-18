@@ -263,6 +263,8 @@ export default function AdminPage() {
     await loadParticipants()
     setClearingType(null)
   }
+
+  async function saveInfoBox(e: React.FormEvent) {
     e.preventDefault()
     setSavingContent('info')
     await Promise.all([
