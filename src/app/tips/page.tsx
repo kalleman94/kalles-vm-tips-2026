@@ -191,11 +191,23 @@ export default function TipsPage() {
 
   return (
     <div className="pb-24">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--color-primary)' }}>
-          Mina tips
-        </h1>
-        <p className="text-gray-500 text-sm mt-1">Inloggad som <strong>{participantName}</strong></p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--color-primary)' }}>
+            Mina tips
+          </h1>
+          <p className="text-gray-500 text-sm mt-1">Inloggad som <strong>{participantName}</strong></p>
+        </div>
+        <button
+          onClick={() => {
+            localStorage.removeItem('participant_id')
+            localStorage.removeItem('participant_name')
+            router.push('/login')
+          }}
+          className="text-sm text-gray-400 hover:text-red-500 transition-colors shrink-0 mt-1"
+        >
+          Logga ut
+        </button>
       </div>
 
       {/* Sticky save button */}
