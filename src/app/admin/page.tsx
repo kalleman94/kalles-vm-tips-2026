@@ -284,6 +284,56 @@ export default function AdminPage() {
     setTimeout(() => setContentMsg(''), 3000)
   }
 
+  // Original placeholder team names per match number – used for reset
+  const KNOCKOUT_DEFAULTS: Record<number, { home: string; away: string }> = {
+    73:  { home: 'Tvåa Grupp A',    away: 'Tvåa Grupp B' },
+    74:  { home: 'Vinnare Grupp E', away: 'Bästa 3:a (A/B/C/D/F)' },
+    75:  { home: 'Vinnare Grupp F', away: 'Tvåa Grupp C' },
+    76:  { home: 'Vinnare Grupp C', away: 'Tvåa Grupp F' },
+    77:  { home: 'Vinnare Grupp I', away: 'Bästa 3:a (C/D/F/G/H)' },
+    78:  { home: 'Tvåa Grupp E',    away: 'Tvåa Grupp I' },
+    79:  { home: 'Vinnare Grupp A', away: 'Bästa 3:a (C/E/F/H/I)' },
+    80:  { home: 'Vinnare Grupp L', away: 'Bästa 3:a (E/H/I/J/K)' },
+    81:  { home: 'Vinnare Grupp D', away: 'Bästa 3:a (B/E/F/I/J)' },
+    82:  { home: 'Vinnare Grupp G', away: 'Bästa 3:a (A/E/H/I/J)' },
+    83:  { home: 'Tvåa Grupp K',    away: 'Tvåa Grupp L' },
+    84:  { home: 'Vinnare Grupp H', away: 'Tvåa Grupp J' },
+    85:  { home: 'Vinnare Grupp B', away: 'Bästa 3:a (E/F/G/I/J)' },
+    86:  { home: 'Vinnare Grupp J', away: 'Tvåa Grupp H' },
+    87:  { home: 'Vinnare Grupp K', away: 'Bästa 3:a (D/E/I/J/L)' },
+    88:  { home: 'Tvåa Grupp D',    away: 'Tvåa Grupp G' },
+    89:  { home: 'Vinnare M74',     away: 'Vinnare M77' },
+    90:  { home: 'Vinnare M73',     away: 'Vinnare M75' },
+    91:  { home: 'Vinnare M83',     away: 'Vinnare M84' },
+    92:  { home: 'Vinnare M81',     away: 'Vinnare M82' },
+    93:  { home: 'Vinnare M76',     away: 'Vinnare M78' },
+    94:  { home: 'Vinnare M79',     away: 'Vinnare M80' },
+    95:  { home: 'Vinnare M86',     away: 'Vinnare M88' },
+    96:  { home: 'Vinnare M85',     away: 'Vinnare M87' },
+    97:  { home: 'Vinnare M89',     away: 'Vinnare M90' },
+    98:  { home: 'Vinnare M91',     away: 'Vinnare M92' },
+    99:  { home: 'Vinnare M93',     away: 'Vinnare M94' },
+    100: { home: 'Vinnare M95',     away: 'Vinnare M96' },
+    101: { home: 'Vinnare M97',     away: 'Vinnare M98' },
+    102: { home: 'Vinnare M99',     away: 'Vinnare M100' },
+    103: { home: 'Förlorare M101',  away: 'Förlorare M102' },
+    104: { home: 'Vinnare M101',    away: 'Vinnare M102' },
+  }
+
+  async function resetKnockoutTeams() {
+    if (!confirm('Återställer ALLA slutspelslags lagnamn till originalet (platshållare). Är du säker?')) return
+    setClearingType('resetTeams')
+    const updates = matches
+      .filter(m => m.phase !== 'group' && KNOCKOUT_DEFAULTS[m.match_number])
+      .map(m => {
+        const d = KNOCKOUT_DEFAULTS[m.match_number]
+        return supabase.from('matches').update({ home_team: d.home, away_team: d.away }).eq('id', m.id)
+      })
+    await Promise.all(updates)
+    await loadMatches()
+    setClearingType(null)
+  }
+
   const groupMatches = matches.filter(m => m.phase === 'group')
   const knockoutMatches = matches.filter(m => m.phase !== 'group')
   const phaseLabel: Record<string, string> = {
@@ -384,6 +434,13 @@ export default function AdminPage() {
         {/* Reset buttons */}
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 mt-4">Farliga åtgärder</p>
         <div className="flex gap-3 flex-wrap">
+          <button
+            onClick={resetKnockoutTeams}
+            disabled={clearingType !== null}
+            className="px-4 py-2 rounded-lg text-white text-sm font-medium disabled:opacity-50 bg-yellow-600 hover:bg-yellow-700 transition-colors"
+          >
+            {clearingType === 'resetTeams' ? 'Återställer...' : '↩️ Återställ slutspelslag'}
+          </button>
           <button
             onClick={clearResults}
             disabled={clearingType !== null}
@@ -682,6 +739,9 @@ function ResultRow({
   return (
     <div className="px-4 py-3 flex items-center gap-2 flex-wrap text-sm">
       {phase && <span className="text-xs bg-gray-100 rounded px-2 py-0.5 text-gray-600 shrink-0">{phase}</span>}
+      {phase && match.match_number != null && (
+        <span className="text-xs bg-blue-100 text-blue-700 font-mono rounded px-2 py-0.5 shrink-0">M{match.match_number}</span>
+      )}
       <span className="text-gray-400 text-xs w-20 shrink-0 leading-tight">
         <span className="block">{new Date(match.match_date).toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm', month: 'short', day: 'numeric' })}</span>
         <span className="block">{new Date(match.match_date).toLocaleTimeString('sv-SE', { timeZone: 'Europe/Stockholm', hour: '2-digit', minute: '2-digit' })}</span>
