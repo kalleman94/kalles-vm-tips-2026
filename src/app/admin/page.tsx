@@ -26,6 +26,7 @@ export default function AdminPage() {
 
   // Settings state
   const [knockoutEnabled, setKnockoutEnabled] = useState(false)
+  const [randomEnabled, setRandomEnabled] = useState(false)
   const [savingKnockout, setSavingKnockout] = useState(false)
   const [groupLocked, setGroupLocked] = useState(false)
   const [bonusLocked, setBonusLocked] = useState(false)
@@ -87,6 +88,7 @@ export default function AdminPage() {
     const map: Record<string, string> = {}
     data.forEach((s: any) => { map[s.key] = s.value })
     setKnockoutEnabled(map['knockout_enabled'] === 'true')
+    setRandomEnabled(map['random_enabled'] === 'true')
     setGroupLocked(map['group_locked'] === 'true')
     setBonusLocked(map['bonus_locked'] === 'true')
     setKnockoutLocked(map['knockout_locked'] === 'true')
@@ -409,7 +411,7 @@ export default function AdminPage() {
 
         {/* Knockout enabled toggle */}
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 mt-4">Synlighet</p>
-        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg mb-4">
+        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg mb-2">
           <div>
             <p className="font-medium text-sm">🏟️ Aktivera slutspelstips</p>
             <p className="text-xs text-gray-500 mt-0.5">
@@ -427,6 +429,27 @@ export default function AdminPage() {
           >
             <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
               knockoutEnabled ? 'translate-x-6' : 'translate-x-1'
+            }`} />
+          </button>
+        </div>
+        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg mb-4">
+          <div>
+            <p className="font-medium text-sm">🎲 Visa Random-knapp</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {randomEnabled
+                ? '✅ Synlig – deltagare kan slumpa gruppspelstips'
+                : '🙈 Dold – Random-knappen visas inte'}
+            </p>
+          </div>
+          <button
+            onClick={() => toggleSetting('random_enabled', randomEnabled, setRandomEnabled)}
+            disabled={savingLock === 'random_enabled'}
+            className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors disabled:opacity-50 ${
+              randomEnabled ? 'bg-green-500' : 'bg-gray-300'
+            }`}
+          >
+            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+              randomEnabled ? 'translate-x-6' : 'translate-x-1'
             }`} />
           </button>
         </div>

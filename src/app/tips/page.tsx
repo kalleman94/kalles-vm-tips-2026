@@ -91,6 +91,7 @@ export default function TipsPage() {
   const [bonus, setBonus] = useState<Partial<BonusAnswers>>({})
   const [lockStatus, setLockStatus] = useState<LockStatus | null>(null)
   const [knockoutEnabled, setKnockoutEnabled] = useState(false)
+  const [randomEnabled, setRandomEnabled] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [activeTab, setActiveTab] = useState<'group' | 'bonus' | 'knockout'>('group')
@@ -110,6 +111,7 @@ export default function TipsPage() {
         const map: Record<string, string> = {}
         data.forEach((s: any) => { map[s.key] = s.value })
         setKnockoutEnabled(map['knockout_enabled'] === 'true')
+        setRandomEnabled(map['random_enabled'] === 'true')
         // Manual locks override time-based locks
         setLockStatus(prev => ({
           groupLocked: prev?.groupLocked || map['group_locked'] === 'true',
@@ -190,6 +192,35 @@ export default function TipsPage() {
   const locked = (phase: string) =>
     phase === 'group' ? lockStatus?.groupLocked : lockStatus?.knockoutLocked
 
+  function randomizeGroup() {
+    // Weighted goal distribution: 0(22%), 1(33%), 2(25%), 3(12%), 4(5%), 5(3%)
+    const goalWeights = [22, 33, 25, 12, 5, 3]
+    const goalCumulative = goalWeights.reduce<number[]>((acc, w, i) => {
+      acc.push((acc[i - 1] ?? 0) + w); return acc
+    }, [])
+    function randomGoals(): number {
+      const r = Math.random() * 100
+      return goalCumulative.findIndex(c => r < c)
+    }
+    const updates: Record<number, Partial<Prediction>> = {}
+    groupMatches.forEach(m => {
+      const home = randomGoals()
+      const away = randomGoals()
+      updates[m.id] = {
+        home_goals: home,
+        away_goals: away,
+        predicted_winner: undefined,
+      }
+    })
+    setPredictions(prev => {
+      const next = { ...prev }
+      Object.entries(updates).forEach(([id, upd]) => {
+        next[Number(id)] = { ...prev[Number(id)], ...upd }
+      })
+      return next
+    })
+  }
+
   const phaseLabel: Record<string, string> = {
     r32: 'Sextondelsfinal', r16: 'Åttondelsfinal', qf: 'Kvartsfinal',
     sf: 'Semifinal', bronze: 'Bronsmatch', final: 'Final'
@@ -254,6 +285,17 @@ export default function TipsPage() {
           {lockStatus?.groupLocked && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-amber-800 text-sm">
               🔒 Gruppspelstips är låsta och kan inte längre ändras.
+            </div>
+          )}
+          {randomEnabled && !lockStatus?.groupLocked && (
+            <div className="flex justify-end">
+              <button
+                onClick={randomizeGroup}
+                className="px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors shadow"
+                style={{ backgroundColor: 'var(--color-accent)' }}
+              >
+                🎲 Random
+              </button>
             </div>
           )}
           {groups.map(g => (
