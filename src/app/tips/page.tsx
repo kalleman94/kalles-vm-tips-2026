@@ -421,46 +421,34 @@ function MatchRow({
   }
 
   return (
-    <div className="px-4 py-3 text-sm">
-      <div className="flex items-start gap-3">
-        <span className="text-gray-400 w-24 shrink-0 text-xs leading-tight pt-0.5">
+    <div className="px-3 py-2.5 text-sm border-b border-gray-100 last:border-0">
+      {/* En rad: datum | hemmalag | [H]–[B] | bortalag | poäng */}
+      <div className="flex items-center gap-2">
+        <span className="text-gray-400 w-14 shrink-0 text-xs leading-tight">
           <span className="block">{new Date(match.match_date).toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm', month: 'short', day: 'numeric' })}</span>
           <span className="block">{new Date(match.match_date).toLocaleTimeString('sv-SE', { timeZone: 'Europe/Stockholm', hour: '2-digit', minute: '2-digit' })}</span>
         </span>
-        <div className="flex-1">
-          {/* Mobil: lagnamn på rad ovanför */}
-          <div className="flex gap-2 mb-2 sm:hidden">
-            <span className="font-medium flex-1 min-w-0 truncate">{homeTeam}</span>
-            <span className="font-medium flex-1 min-w-0 truncate text-right">{awayTeam}</span>
-          </div>
-          {/* Resultatrad */}
-          <div className="flex items-center gap-3">
-            <span className="hidden sm:block flex-1 text-right font-medium">{homeTeam}</span>
-            <div className="flex items-center gap-1">
-              <input
-                type="number" min={0} max={20}
-                value={pred?.home_goals ?? ''}
-                onChange={e => handleGoalChange('home_goals', e.target.value)}
-                disabled={locked}
-                className="w-12 text-center border border-gray-300 rounded px-1 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50 disabled:text-gray-400"
-              />
-              <span className="text-gray-400">–</span>
-              <input
-                type="number" min={0} max={20}
-                value={pred?.away_goals ?? ''}
-                onChange={e => handleGoalChange('away_goals', e.target.value)}
-                disabled={locked}
-                className="w-12 text-center border border-gray-300 rounded px-1 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50 disabled:text-gray-400"
-              />
-            </div>
-            <div className="hidden sm:flex flex-1 items-center gap-2">
-              <span className="font-medium">{awayTeam}</span>
-              <PointsBadge info={info} />
-            </div>
-            <div className="flex-1 flex justify-end sm:hidden">
-              <PointsBadge info={info} />
-            </div>
-          </div>
+        <span className="w-0 flex-1 text-right font-medium text-xs truncate">{homeTeam}</span>
+        <div className="flex items-center gap-1 shrink-0">
+          <input
+            type="number" min={0} max={20}
+            value={pred?.home_goals ?? ''}
+            onChange={e => handleGoalChange('home_goals', e.target.value)}
+            disabled={locked}
+            className="w-10 text-center border border-gray-300 rounded px-1 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50 disabled:text-gray-400 text-sm"
+          />
+          <span className="text-gray-400">–</span>
+          <input
+            type="number" min={0} max={20}
+            value={pred?.away_goals ?? ''}
+            onChange={e => handleGoalChange('away_goals', e.target.value)}
+            disabled={locked}
+            className="w-10 text-center border border-gray-300 rounded px-1 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50 disabled:text-gray-400 text-sm"
+          />
+        </div>
+        <span className="w-0 flex-1 font-medium text-xs truncate">{awayTeam}</span>
+        <div className="shrink-0"><PointsBadge info={info} /></div>
+      </div>
           {showWinner && isDraw && (
             <div className="mt-2 flex items-center gap-2 flex-wrap">
               <span className="text-xs text-gray-500 shrink-0">
@@ -487,8 +475,6 @@ function MatchRow({
               })}
             </div>
           )}
-        </div>
-      </div>
     </div>
   )
 }
