@@ -13,59 +13,67 @@ function isPlaceholder(name: string): boolean {
   return /^(Vinnare|Tvåa|Bästa|Förlorare)/.test(name)
 }
 
+// Explicit bracket mapping based on FIFA's official 2026 World Cup bracket.
+// Each entry: winner of match `home` → home slot, winner of `away` → away slot in match `to`.
+const WINNER_BRACKET: Array<{ to: number; home: number; away: number }> = [
+  // Round of 16
+  { to: 89, home: 74, away: 77 },
+  { to: 90, home: 73, away: 75 },
+  { to: 91, home: 83, away: 84 },
+  { to: 92, home: 81, away: 82 },
+  { to: 93, home: 76, away: 78 },
+  { to: 94, home: 79, away: 80 },
+  { to: 95, home: 86, away: 88 },
+  { to: 96, home: 85, away: 87 },
+  // Quarter-finals
+  { to: 97,  home: 89, away: 90 },
+  { to: 98,  home: 91, away: 92 },
+  { to: 99,  home: 93, away: 94 },
+  { to: 100, home: 95, away: 96 },
+  // Semi-finals
+  { to: 101, home: 97,  away: 98  },
+  { to: 102, home: 99,  away: 100 },
+  // Final
+  { to: 104, home: 101, away: 102 },
+]
+
 function buildResolvedTeams(
   matches: Match[],
   predictions: Record<number, Partial<Prediction>>
 ): Record<number, { home: string; away: string }> {
   const resolved: Record<number, { home: string; away: string }> = {}
-  matches.forEach(m => { resolved[m.id] = { home: m.home_team, away: m.away_team } })
+  const byNum: Record<number, Match> = {}
+  matches.forEach(m => {
+    resolved[m.id] = { home: m.home_team, away: m.away_team }
+    byNum[m.match_number] = m
+  })
 
-  const byPhase = (phase: string) =>
-    matches.filter(m => m.phase === phase).sort((a, b) => a.match_number - b.match_number)
-
-  const propagate = (fromPhase: string, toPhase: string) => {
-    const from = byPhase(fromPhase)
-    const to = byPhase(toPhase)
-    to.forEach((match, i) => {
-      const srcHome = from[2 * i]
-      const srcAway = from[2 * i + 1]
-      if (srcHome) {
-        const winner = predictions[srcHome.id]?.predicted_winner
-        if (winner && isPlaceholder(resolved[match.id].home))
-          resolved[match.id].home = winner
-      }
-      if (srcAway) {
-        const winner = predictions[srcAway.id]?.predicted_winner
-        if (winner && isPlaceholder(resolved[match.id].away))
-          resolved[match.id].away = winner
-      }
-    })
+  for (const { to, home: homeNum, away: awayNum } of WINNER_BRACKET) {
+    const toMatch = byNum[to]
+    const homeSource = byNum[homeNum]
+    const awaySource = byNum[awayNum]
+    if (!toMatch || !homeSource || !awaySource) continue
+    const homeWinner = predictions[homeSource.id]?.predicted_winner
+    const awayWinner = predictions[awaySource.id]?.predicted_winner
+    if (homeWinner && isPlaceholder(resolved[toMatch.id].home))
+      resolved[toMatch.id].home = homeWinner
+    if (awayWinner && isPlaceholder(resolved[toMatch.id].away))
+      resolved[toMatch.id].away = awayWinner
   }
 
-  propagate('r32', 'r16')
-  propagate('r16', 'qf')
-  propagate('qf', 'sf')
-
-  const sfMatches = byPhase('sf')
-  const [finalMatch] = byPhase('final')
-  const [bronzeMatch] = byPhase('bronze')
-
-  if (finalMatch && sfMatches.length >= 2) {
-    const w0 = predictions[sfMatches[0].id]?.predicted_winner
-    const w1 = predictions[sfMatches[1].id]?.predicted_winner
-    if (w0 && isPlaceholder(resolved[finalMatch.id].home)) resolved[finalMatch.id].home = w0
-    if (w1 && isPlaceholder(resolved[finalMatch.id].away)) resolved[finalMatch.id].away = w1
-  }
-
-  if (bronzeMatch && sfMatches.length >= 2) {
-    const sf0 = resolved[sfMatches[0].id]
-    const sf1 = resolved[sfMatches[1].id]
-    const w0 = predictions[sfMatches[0].id]?.predicted_winner
-    const w1 = predictions[sfMatches[1].id]?.predicted_winner
-    if (w0 && isPlaceholder(resolved[bronzeMatch.id].home))
-      resolved[bronzeMatch.id].home = w0 === sf0.home ? sf0.away : sf0.home
-    if (w1 && isPlaceholder(resolved[bronzeMatch.id].away))
-      resolved[bronzeMatch.id].away = w1 === sf1.home ? sf1.away : sf1.home
+  // Bronze: losers of the two semi-finals (match numbers 101 and 102)
+  const bronzeMatch = byNum[103]
+  const sf1 = byNum[101]
+  const sf2 = byNum[102]
+  if (bronzeMatch && sf1 && sf2) {
+    const sf1r = resolved[sf1.id]
+    const sf2r = resolved[sf2.id]
+    const w1 = predictions[sf1.id]?.predicted_winner
+    const w2 = predictions[sf2.id]?.predicted_winner
+    if (w1 && isPlaceholder(resolved[bronzeMatch.id].home))
+      resolved[bronzeMatch.id].home = w1 === sf1r.home ? sf1r.away : sf1r.home
+    if (w2 && isPlaceholder(resolved[bronzeMatch.id].away))
+      resolved[bronzeMatch.id].away = w2 === sf2r.home ? sf2r.away : sf2r.home
   }
 
   return resolved
@@ -393,6 +401,25 @@ function MatchRow({
   const homeTeam = resolvedHome ?? match.home_team
   const awayTeam = resolvedAway ?? match.away_team
   const info = getMatchPointInfo(pred, result, match)
+
+  const homeGoals = pred?.home_goals
+  const awayGoals = pred?.away_goals
+  const bothFilled = homeGoals != null && awayGoals != null
+  const isDraw = bothFilled && homeGoals === awayGoals
+
+  function handleGoalChange(field: 'home_goals' | 'away_goals', val: string) {
+    onChangePred(field, val)
+    const newHome = field === 'home_goals' ? (val === '' ? null : Number(val)) : homeGoals
+    const newAway = field === 'away_goals' ? (val === '' ? null : Number(val)) : awayGoals
+    if (newHome != null && newAway != null) {
+      if (newHome !== newAway) {
+        onChangePred('predicted_winner', newHome > newAway ? homeTeam : awayTeam)
+      } else {
+        onChangePred('predicted_winner', '')
+      }
+    }
+  }
+
   return (
     <div className="px-4 py-3 text-sm">
       <div className="flex items-start gap-3">
@@ -413,7 +440,7 @@ function MatchRow({
               <input
                 type="number" min={0} max={20}
                 value={pred?.home_goals ?? ''}
-                onChange={e => onChangePred('home_goals', e.target.value)}
+                onChange={e => handleGoalChange('home_goals', e.target.value)}
                 disabled={locked}
                 className="w-12 text-center border border-gray-300 rounded px-1 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50 disabled:text-gray-400"
               />
@@ -421,7 +448,7 @@ function MatchRow({
               <input
                 type="number" min={0} max={20}
                 value={pred?.away_goals ?? ''}
-                onChange={e => onChangePred('away_goals', e.target.value)}
+                onChange={e => handleGoalChange('away_goals', e.target.value)}
                 disabled={locked}
                 className="w-12 text-center border border-gray-300 rounded px-1 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50 disabled:text-gray-400"
               />
@@ -434,9 +461,11 @@ function MatchRow({
               <PointsBadge info={info} />
             </div>
           </div>
-          {showWinner && (
+          {showWinner && isDraw && (
             <div className="mt-2 flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-gray-500 shrink-0">Vidare:</span>
+              <span className="text-xs text-gray-500 shrink-0">
+                {match.phase === 'bronze' ? 'Vinnare:' : 'Vidare:'}
+              </span>
               {[homeTeam, awayTeam].map(team => {
                 const selected = pred?.predicted_winner === team
                 return (
