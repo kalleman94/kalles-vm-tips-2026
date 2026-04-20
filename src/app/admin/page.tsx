@@ -668,7 +668,7 @@ export default function AdminPage() {
           <span className="text-white text-base">{groupResultsOpen ? '▲' : '▼'}</span>
         </button>
         {groupResultsOpen && (
-          <div className="divide-y">
+          <div>
             {groupMatches.map(m => (
               <ResultRow key={m.id} match={m} result={results[m.id]}
                 saving={saving === m.id} saved={savedIds.includes(m.id)}
@@ -695,7 +695,7 @@ export default function AdminPage() {
             <span className="text-white text-base">{knockoutResultsOpen ? '▲' : '▼'}</span>
           </button>
           {knockoutResultsOpen && (
-            <div className="divide-y">
+            <div>
               {knockoutMatches.map(m => (
                 <ResultRow key={m.id} match={m} result={results[m.id]}
                   saving={saving === m.id} saved={savedIds.includes(m.id)}
@@ -737,53 +737,67 @@ function ResultRow({
   const isSaving = saving || !!savingTeam
   const isSaved = saved || !!savedTeam
   return (
-    <div className="px-4 py-3 flex items-center gap-2 flex-wrap text-sm">
-      {phase && <span className="text-xs bg-gray-100 rounded px-2 py-0.5 text-gray-600 shrink-0">{phase}</span>}
-      {phase && match.match_number != null && (
-        <span className="text-xs bg-blue-100 text-blue-700 font-mono rounded px-2 py-0.5 shrink-0">M{match.match_number}</span>
-      )}
-      <span className="text-gray-400 text-xs w-20 shrink-0 leading-tight">
-        <span className="block">{new Date(match.match_date).toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm', month: 'short', day: 'numeric' })}</span>
-        <span className="block">{new Date(match.match_date).toLocaleTimeString('sv-SE', { timeZone: 'Europe/Stockholm', hour: '2-digit', minute: '2-digit' })}</span>
-      </span>
-      {teamEdit && onTeamChange ? (
-        <input
-          type="text"
-          value={teamEdit.home}
-          onChange={e => onTeamChange('home', e.target.value)}
-          className="flex-1 min-w-20 text-right border border-gray-300 rounded px-2 py-1 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-blue-400"
-        />
-      ) : (
-        <span className="flex-1 text-right font-medium text-xs">{match.home_team}</span>
-      )}
-      <input type="number" min={0} max={20} value={result?.home ?? ''}
-        onChange={e => onChange('home', e.target.value)}
-        className="w-10 text-center border border-gray-300 rounded px-1 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 text-sm" />
-      <span className="text-gray-400">–</span>
-      <input type="number" min={0} max={20} value={result?.away ?? ''}
-        onChange={e => onChange('away', e.target.value)}
-        className="w-10 text-center border border-gray-300 rounded px-1 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 text-sm" />
-      {teamEdit && onTeamChange ? (
-        <input
-          type="text"
-          value={teamEdit.away}
-          onChange={e => onTeamChange('away', e.target.value)}
-          className="flex-1 min-w-20 border border-gray-300 rounded px-2 py-1 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-blue-400"
-        />
-      ) : (
-        <span className="flex-1 font-medium text-xs">{match.away_team}</span>
-      )}
-      {showWinner && (
-        <input type="text" value={result?.winner ?? ''} onChange={e => onChange('winner', e.target.value)}
-          placeholder="Vinnare" className="border border-gray-300 rounded px-2 py-1 text-xs w-28 focus:outline-none" />
-      )}
-      <button
-        onClick={() => { onSave(); onTeamSave?.() }}
-        disabled={isSaving}
-        className="px-3 py-1 rounded text-white text-xs font-medium disabled:opacity-50 transition-colors"
-        style={{ backgroundColor: isSaved ? 'var(--color-green)' : 'var(--color-primary)' }}>
-        {isSaving ? '...' : isSaved ? '✓' : 'Spara'}
-      </button>
+    <div className="px-4 py-3 text-sm border-b border-gray-100 last:border-0">
+      {/* Row 1: badges + date */}
+      <div className="flex items-center gap-2 flex-wrap mb-2">
+        {phase && (
+          <span className="text-xs bg-gray-100 rounded px-2 py-0.5 text-gray-600">{phase}</span>
+        )}
+        {phase && match.match_number != null && (
+          <span className="text-xs bg-blue-100 text-blue-700 font-mono rounded px-2 py-0.5">M{match.match_number}</span>
+        )}
+        <span className="text-gray-400 text-xs leading-tight">
+          {new Date(match.match_date).toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm', month: 'short', day: 'numeric' })}
+          {' · '}
+          {new Date(match.match_date).toLocaleTimeString('sv-SE', { timeZone: 'Europe/Stockholm', hour: '2-digit', minute: '2-digit' })}
+        </span>
+      </div>
+
+      {/* Row 2: home team – score – score – away team */}
+      <div className="flex items-center justify-center gap-2">
+        {teamEdit && onTeamChange ? (
+          <input
+            type="text"
+            value={teamEdit.home}
+            onChange={e => onTeamChange('home', e.target.value)}
+            className="w-0 flex-1 text-right border border-gray-300 rounded px-2 py-1 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-blue-400"
+          />
+        ) : (
+          <span className="w-0 flex-1 text-right font-medium text-xs truncate">{match.home_team}</span>
+        )}
+        <input type="number" min={0} max={20} value={result?.home ?? ''}
+          onChange={e => onChange('home', e.target.value)}
+          className="w-10 shrink-0 text-center border border-gray-300 rounded px-1 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 text-sm" />
+        <span className="text-gray-400 shrink-0">–</span>
+        <input type="number" min={0} max={20} value={result?.away ?? ''}
+          onChange={e => onChange('away', e.target.value)}
+          className="w-10 shrink-0 text-center border border-gray-300 rounded px-1 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 text-sm" />
+        {teamEdit && onTeamChange ? (
+          <input
+            type="text"
+            value={teamEdit.away}
+            onChange={e => onTeamChange('away', e.target.value)}
+            className="w-0 flex-1 border border-gray-300 rounded px-2 py-1 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-blue-400"
+          />
+        ) : (
+          <span className="w-0 flex-1 font-medium text-xs truncate">{match.away_team}</span>
+        )}
+      </div>
+
+      {/* Row 3: winner + save */}
+      <div className="flex items-center justify-end gap-2 mt-2">
+        {showWinner && (
+          <input type="text" value={result?.winner ?? ''} onChange={e => onChange('winner', e.target.value)}
+            placeholder="Vinnare" className="flex-1 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none" />
+        )}
+        <button
+          onClick={() => { onSave(); onTeamSave?.() }}
+          disabled={isSaving}
+          className="px-3 py-1 rounded text-white text-xs font-medium disabled:opacity-50 transition-colors shrink-0"
+          style={{ backgroundColor: isSaved ? 'var(--color-green)' : 'var(--color-primary)' }}>
+          {isSaving ? '...' : isSaved ? '✓' : 'Spara'}
+        </button>
+      </div>
     </div>
   )
 }
