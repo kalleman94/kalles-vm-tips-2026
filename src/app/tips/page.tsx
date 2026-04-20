@@ -529,6 +529,19 @@ function getMatchPointInfo(
   if (!result) return null
   if (!pred || pred.home_goals === null || pred.home_goals === undefined ||
       pred.away_goals === null || pred.away_goals === undefined) return { points: 0, exact: false }
+
+  // Knockout gate: if real teams are filled in but user predicted wrong teams → 0 points
+  if (match.phase !== 'group') {
+    const isPlaceholder = (n: string) => /^(Vinnare|Tvåa|Bästa|Förlorare)/.test(n)
+    const realTeamsFilled = !isPlaceholder(match.home_team) && !isPlaceholder(match.away_team)
+    if (realTeamsFilled) {
+      const w = pred.predicted_winner
+      if (!w || (w !== match.home_team && w !== match.away_team)) {
+        return { points: 0, exact: false }
+      }
+    }
+  }
+
   const sign = (h: number, a: number) => h > a ? '1' : h === a ? 'X' : '2'
   let points = 0
   const homeCorrect = pred.home_goals === result.home_goals

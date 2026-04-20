@@ -36,6 +36,9 @@ export async function POST() {
 
   const matchMap = new Map(matches.map((m: any) => [m.id, m]))
 
+  // Helper: detect placeholder team names (before admin fills in real teams)
+  const isPlaceholder = (name: string) => /^(Vinnare|Tvåa|Bästa|Förlorare)/.test(name)
+
   const scoreRows = participants.map((p: any) => {
     const preds = allPredictions.filter((pred: any) => pred.participant_id === p.id)
     const bonus = allBonus?.find((b: any) => b.participant_id === p.id)
@@ -49,12 +52,18 @@ export async function POST() {
       const match = matchMap.get(pred.match_id)
       if (!match) return
 
-      const pts = calculateMatchPoints(pred, result, DEFAULT_POINTS)
-      if (match.phase === 'group') {
-        groupPoints += pts
-      } else {
+      if (match.phase !== 'group') {
+        // Gate check: real teams must be filled in AND user must have predicted one of them
+        const realTeamsFilled = !isPlaceholder(match.home_team) && !isPlaceholder(match.away_team)
+        if (realTeamsFilled) {
+          const w = pred.predicted_winner
+          if (!w || (w !== match.home_team && w !== match.away_team)) {
+            return // Wrong teams → 0 points for this match
+          }
+        }
+        const pts = calculateMatchPoints(pred, result, DEFAULT_POINTS)
         knockoutPoints += pts
-        // Bonus points for correct team advancing
+        // Bonus for correct advancing team
         if (pred.predicted_winner && result.winner && pred.predicted_winner === result.winner) {
           const phaseBonus: Record<string, number> = {
             r32: DEFAULT_POINTS.r32_team, r16: DEFAULT_POINTS.r16_team,
@@ -63,6 +72,8 @@ export async function POST() {
           }
           knockoutPoints += phaseBonus[match.phase] ?? 0
         }
+      } else {
+        groupPoints += calculateMatchPoints(pred, result, DEFAULT_POINTS)
       }
     })
 
