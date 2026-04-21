@@ -206,8 +206,10 @@ export default function AdminPage() {
   async function saveKnockoutResult(matchId: number) {
     const r = results[matchId]
     const t = teamEdits[matchId]
-    if (!r || r.home === '' || r.away === '') return
+    const hasResult = r && r.home !== '' && r.away !== ''
     setSaving(matchId)
+
+    // Always save team names if changed
     if (t?.home?.trim() && t?.away?.trim()) {
       await supabase.from('matches')
         .update({ home_team: t.home.trim(), away_team: t.away.trim() })
@@ -215,19 +217,24 @@ export default function AdminPage() {
       setMatches(prev => prev.map(m => m.id === matchId
         ? { ...m, home_team: t.home.trim(), away_team: t.away.trim() } : m))
     }
-    const { error } = await supabase.from('match_results').upsert(
-      { match_id: matchId, home_goals: Number(r.home), away_goals: Number(r.away), winner: r.winner || null },
-      { onConflict: 'match_id' }
-    )
-    if (error) { setSaving(null); alert('Fel: ' + error.message); return }
-    const match = matches.find(m => m.id === matchId)
-    if (match && r.winner) {
-      const homeTeam = t?.home?.trim() || match.home_team
-      const awayTeam = t?.away?.trim() || match.away_team
-      const loser = r.winner === homeTeam ? awayTeam : homeTeam
-      await propagateWinner(match.match_number, r.winner, loser)
+
+    // Save result + propagate only if goals are filled in
+    if (hasResult) {
+      const { error } = await supabase.from('match_results').upsert(
+        { match_id: matchId, home_goals: Number(r.home), away_goals: Number(r.away), winner: r.winner || null },
+        { onConflict: 'match_id' }
+      )
+      if (error) { setSaving(null); alert('Fel: ' + error.message); return }
+      const match = matches.find(m => m.id === matchId)
+      if (match && r.winner) {
+        const homeTeam = t?.home?.trim() || match.home_team
+        const awayTeam = t?.away?.trim() || match.away_team
+        const loser = r.winner === homeTeam ? awayTeam : homeTeam
+        await propagateWinner(match.match_number, r.winner, loser)
+      }
+      await fetch('/api/recalculate', { method: 'POST' })
     }
-    await fetch('/api/recalculate', { method: 'POST' })
+
     await loadMatches()
     setSaving(null)
     setSavedIds(prev => [...prev, matchId])
