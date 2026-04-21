@@ -83,6 +83,7 @@ export default function TipsPage() {
         const map: Record<string, string> = {}
         data.forEach((s: any) => { map[s.key] = s.value })
         setKnockoutEnabled(map['knockout_enabled'] === 'true')
+        if (map['knockout_enabled'] === 'true') setActiveTab('knockout')
         setRandomEnabled(map['random_enabled'] === 'true')
         // Manual locks override time-based locks
         setLockStatus(prev => ({
