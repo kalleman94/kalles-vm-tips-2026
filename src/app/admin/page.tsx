@@ -44,7 +44,7 @@ export default function AdminPage() {
   const [participantsOpen, setParticipantsOpen] = useState(false)
 
   // Participant management
-  const [participantList, setParticipantList] = useState<{ id: string; name: string; pin_hash: string; total_points: number; group_points: number; knockout_points: number; bonus_points: number; adjustment_points: number }[]>([])
+  const [participantList, setParticipantList] = useState<{ id: string; name: string; pin_hash: string; total_points: number; group_points: number; knockout_points: number; bonus_points: number; adjustment_points: number; has_swished: boolean }[]>([])
   const [deletingParticipantId, setDeletingParticipantId] = useState<string | null>(null)
   const [adjustmentEdits, setAdjustmentEdits] = useState<Record<string, string>>({})
   const [savingScore, setSavingScore] = useState<string | null>(null)
@@ -260,7 +260,7 @@ export default function AdminPage() {
 
   async function loadParticipants() {
     const [{ data: pData }, { data: sData }] = await Promise.all([
-      supabase.from('participants').select('id, name, pin_hash').order('name'),
+      supabase.from('participants').select('id, name, pin_hash, has_swished').order('name'),
       supabase.from('scores').select('*'),
     ])
     if (!pData) return
@@ -268,6 +268,7 @@ export default function AdminPage() {
     sData?.forEach((s: any) => { scoreMap[s.participant_id] = s })
     const list = pData.map((p: any) => ({
       id: p.id, name: p.name, pin_hash: p.pin_hash,
+      has_swished: p.has_swished ?? false,
       total_points: scoreMap[p.id]?.total_points ?? 0,
       group_points: scoreMap[p.id]?.group_points ?? 0,
       knockout_points: scoreMap[p.id]?.knockout_points ?? 0,
@@ -301,6 +302,12 @@ export default function AdminPage() {
     setSavedScoreIds(prev => [...prev, participantId])
     setTimeout(() => setSavedScoreIds(prev => prev.filter(id => id !== participantId)), 3000)
     loadParticipants()
+  }
+
+  async function toggleSwish(participantId: string, current: boolean) {
+    const newVal = !current
+    await supabase.from('participants').update({ has_swished: newVal }).eq('id', participantId)
+    setParticipantList(prev => prev.map(p => p.id === participantId ? { ...p, has_swished: newVal } : p))
   }
 
   async function clearResults() {
@@ -691,6 +698,7 @@ export default function AdminPage() {
                     <th className="pb-2 pr-2 text-center">Bonus</th>
                     <th className="pb-2 pr-2 text-center text-purple-600">Justering</th>
                     <th className="pb-2 pr-2 text-center">Totalt</th>
+                    <th className="pb-2 pr-2 text-center text-green-600">Swish</th>
                     <th className="pb-2"></th>
                   </tr>
                 </thead>
@@ -713,6 +721,19 @@ export default function AdminPage() {
                           />
                         </td>
                         <td className="py-2 pr-2 text-center font-semibold">{p.total_points}</td>
+                        <td className="py-2 pr-2 text-center">
+                          <button
+                            onClick={() => toggleSwish(p.id, p.has_swished)}
+                            title={p.has_swished ? 'Markera som ej Swishat' : 'Markera som Swishat'}
+                            className={`w-7 h-7 rounded-full text-sm font-bold transition-colors border-2 ${
+                              p.has_swished
+                                ? 'bg-green-500 border-green-500 text-white'
+                                : 'bg-white border-gray-300 text-gray-300 hover:border-green-400'
+                            }`}
+                          >
+                            {p.has_swished ? '✓' : '–'}
+                          </button>
+                        </td>
                         <td className="py-2 flex gap-1">
                           <button
                             onClick={() => saveScore(p.id)}

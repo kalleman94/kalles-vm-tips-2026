@@ -67,6 +67,7 @@ export default function TipsPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [activeTab, setActiveTab] = useState<'group' | 'bonus' | 'knockout'>('group')
+  const [hasSwished, setHasSwished] = useState<boolean | null>(null)
 
   useEffect(() => {
     const id = localStorage.getItem('participant_id')
@@ -76,6 +77,11 @@ export default function TipsPage() {
     setParticipantName(name ?? '')
     setLockStatus(getLockStatus())
     loadData(id)
+    // Load has_swished for this participant
+    createClient().from('participants').select('has_swished').eq('id', id).maybeSingle()
+      .then(({ data }: { data: any }) => {
+        setHasSwished(data?.has_swished ?? false)
+      })
     // Load settings from DB (knockout_enabled + manual locks)
     createClient().from('settings').select('key, value')
       .then(({ data }: { data: any }) => {
@@ -270,6 +276,15 @@ export default function TipsPage() {
           Logga ut
         </button>
       </div>
+
+      {/* Swish banner – sticky under header when not swished */}
+      {hasSwished === false && (
+        <div className="sticky top-0 z-40 -mx-4 px-4 py-2 bg-red-50 border-b border-red-200">
+          <p className="text-center text-sm font-semibold text-red-600">
+            🔴 Du har inte Swishat – kontakta administratören
+          </p>
+        </div>
+      )}
 
       {/* Sticky save button */}
       <div className="fixed bottom-0 left-0 right-0 z-50 flex flex-col items-center px-4 py-3 bg-white/80 backdrop-blur border-t border-gray-200 shadow-lg gap-2">
