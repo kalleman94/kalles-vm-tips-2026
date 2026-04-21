@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { getLockStatus } from '@/lib/lock'
 import { Match, Prediction, BonusAnswers, LockStatus, MatchResult, DEFAULT_POINTS } from '@/lib/types'
-import { WINNER_BRACKET, isPlaceholderName } from '@/lib/bracket'
+import { WINNER_BRACKET, BRONZE_MATCH_NUM, BRONZE_SF1_NUM, BRONZE_SF2_NUM, isPlaceholderName } from '@/lib/bracket'
 
 const PHASES_GROUP = 'group'
 const PHASES_KNOCKOUT = ['r32', 'r16', 'qf', 'sf', 'bronze', 'final']
@@ -160,6 +160,48 @@ export default function TipsPage() {
     () => buildResolvedTeams(matches, predictions),
     [matches, predictions]
   )
+
+  // Strict gate (mirrors route.ts logic) – used for point display badges
+  const matchTeamsOk = useMemo(() => {
+    const byNum: Record<number, Match> = {}
+    matches.forEach(m => { byNum[m.match_number] = m })
+    const ok: Record<number, boolean> = {}
+    matches.forEach(m => {
+      if (m.phase === 'group') { ok[m.id] = true; return }
+      if (isPlaceholder(m.home_team) || isPlaceholder(m.away_team)) { ok[m.id] = true; return }
+
+      const isR32 = m.match_number >= 73 && m.match_number <= 88
+      if (isR32) {
+        const w = predictions[m.id]?.predicted_winner
+        ok[m.id] = !!w && (w === m.home_team || w === m.away_team)
+        return
+      }
+
+      const entry = WINNER_BRACKET.find(b => b.to === m.match_number)
+      if (entry) {
+        const hs = byNum[entry.home]
+        const as_ = byNum[entry.away]
+        ok[m.id] = !!hs && !!as_ &&
+          predictions[hs.id]?.predicted_winner === m.home_team &&
+          predictions[as_.id]?.predicted_winner === m.away_team
+        return
+      }
+
+      if (m.match_number === BRONZE_MATCH_NUM) {
+        const sf1 = byNum[BRONZE_SF1_NUM]
+        const sf2 = byNum[BRONZE_SF2_NUM]
+        if (!sf1 || !sf2) { ok[m.id] = true; return }
+        const w1 = predictions[sf1.id]?.predicted_winner
+        const w2 = predictions[sf2.id]?.predicted_winner
+        const l1 = w1 === sf1.home_team ? sf1.away_team : (w1 === sf1.away_team ? sf1.home_team : null)
+        const l2 = w2 === sf2.home_team ? sf2.away_team : (w2 === sf2.away_team ? sf2.home_team : null)
+        ok[m.id] = l1 === m.home_team && l2 === m.away_team
+        return
+      }
+      ok[m.id] = true
+    })
+    return ok
+  }, [matches, predictions])
 
   const locked = (phase: string) =>
     phase === 'group' ? lockStatus?.groupLocked : lockStatus?.knockoutLocked
@@ -386,7 +428,8 @@ export default function TipsPage() {
                         <MatchRow key={m.id} match={m} pred={predictions[m.id]} result={results[m.id]} locked={!!lockStatus?.knockoutLocked}
                           onChangePred={(field, val) => setPred(m.id, field, val)} showWinner
                           resolvedHome={resolvedTeams[m.id]?.home}
-                          resolvedAway={resolvedTeams[m.id]?.away} />
+                          resolvedAway={resolvedTeams[m.id]?.away}
+                          teamsMatch={matchTeamsOk[m.id] ?? true} />
                       ))}
                     </div>
                   </div>
@@ -401,7 +444,7 @@ export default function TipsPage() {
 }
 
 function MatchRow({
-  match, pred, result, locked, onChangePred, showWinner = false, resolvedHome, resolvedAway
+  match, pred, result, locked, onChangePred, showWinner = false, resolvedHome, resolvedAway, teamsMatch = true
 }: {
   match: Match
   pred?: Partial<Prediction>
@@ -411,10 +454,11 @@ function MatchRow({
   showWinner?: boolean
   resolvedHome?: string
   resolvedAway?: string
+  teamsMatch?: boolean
 }){
   const homeTeam = resolvedHome ?? match.home_team
   const awayTeam = resolvedAway ?? match.away_team
-  const info = getMatchPointInfo(pred, result, match)
+  const info = getMatchPointInfo(pred, result, match, teamsMatch)
 
   const homeGoals = pred?.home_goals
   const awayGoals = pred?.away_goals
@@ -496,21 +540,16 @@ function MatchRow({
 function getMatchPointInfo(
   pred: Partial<Prediction> | undefined,
   result: MatchResult | undefined,
-  match: Match
+  match: Match,
+  teamsMatch = true
 ): { points: number; exact: boolean } | null {
   if (!result) return null
   if (!pred || pred.home_goals === null || pred.home_goals === undefined ||
       pred.away_goals === null || pred.away_goals === undefined) return { points: 0, exact: false }
 
-  // Gate: predicted_winner must be one of the actual teams
   if (match.phase !== 'group') {
     const realTeamsFilled = !isPlaceholder(match.home_team) && !isPlaceholder(match.away_team)
-    if (realTeamsFilled) {
-      const w = pred.predicted_winner
-      if (!w || (w !== match.home_team && w !== match.away_team)) {
-        return { points: 0, exact: false }
-      }
-    }
+    if (realTeamsFilled && !teamsMatch) return { points: 0, exact: false }
   }
 
   const sign = (h: number, a: number) => h > a ? '1' : h === a ? 'X' : '2'

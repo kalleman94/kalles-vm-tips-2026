@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { calculateMatchPoints, calculateBonusPoints } from '@/lib/scoring'
 import { DEFAULT_POINTS } from '@/lib/types'
-import { WINNER_BRACKET, isPlaceholderName } from '@/lib/bracket'
+import { WINNER_BRACKET, BRONZE_MATCH_NUM, BRONZE_SF1_NUM, BRONZE_SF2_NUM, isPlaceholderName } from '@/lib/bracket'
 
 export async function POST() {
   const supabase = await createServerSupabaseClient()
@@ -36,6 +36,43 @@ export async function POST() {
   const matchMap    = new Map(matches.map((m: any) => [m.id, m]))
   const matchByNum  = new Map(matches.map((m: any) => [m.match_number, m]))
 
+  // Gate: both source predicted_winners must match actual team names.
+  // r32 uses simple check (teams come from group stage, no source predictions).
+  function gatePass(match: any, preds: any[]): boolean {
+    if (isPlaceholderName(match.home_team) || isPlaceholderName(match.away_team)) return true
+
+    const isR32 = match.match_number >= 73 && match.match_number <= 88
+    if (isR32) {
+      const w = preds.find((p: any) => p.match_id === match.id)?.predicted_winner
+      return !!w && (w === match.home_team || w === match.away_team)
+    }
+
+    // r16+: check both source predicted_winners
+    const entry = WINNER_BRACKET.find(b => b.to === match.match_number)
+    if (entry) {
+      const hs = matchByNum.get(entry.home)
+      const as_ = matchByNum.get(entry.away)
+      if (!hs || !as_) return true
+      const hw = preds.find((p: any) => p.match_id === hs.id)?.predicted_winner
+      const aw = preds.find((p: any) => p.match_id === as_.id)?.predicted_winner
+      return hw === match.home_team && aw === match.away_team
+    }
+
+    // Bronze: check predicted losers of both SFs
+    if (match.match_number === BRONZE_MATCH_NUM) {
+      const sf1 = matchByNum.get(BRONZE_SF1_NUM)
+      const sf2 = matchByNum.get(BRONZE_SF2_NUM)
+      if (!sf1 || !sf2) return true
+      const w1 = preds.find((p: any) => p.match_id === sf1.id)?.predicted_winner
+      const w2 = preds.find((p: any) => p.match_id === sf2.id)?.predicted_winner
+      const l1 = w1 === sf1.home_team ? sf1.away_team : (w1 === sf1.away_team ? sf1.home_team : null)
+      const l2 = w2 === sf2.home_team ? sf2.away_team : (w2 === sf2.away_team ? sf2.home_team : null)
+      return l1 === match.home_team && l2 === match.away_team
+    }
+
+    return true
+  }
+
   const scoreRows = participants.map((p: any) => {
     const preds = allPredictions.filter((pred: any) => pred.participant_id === p.id)
     const bonus = allBonus?.find((b: any) => b.participant_id === p.id)
@@ -50,11 +87,7 @@ export async function POST() {
       if (!match) return
 
       if (match.phase !== 'group') {
-        const realTeams = !isPlaceholderName(match.home_team) && !isPlaceholderName(match.away_team)
-        if (realTeams) {
-          const w = pred.predicted_winner
-          if (!w || (w !== match.home_team && w !== match.away_team)) return // 0 points
-        }
+        if (!gatePass(match, preds)) return // 0 points
 
         knockoutPoints += calculateMatchPoints(pred, result, DEFAULT_POINTS)
         if (pred.predicted_winner && result.winner && pred.predicted_winner === result.winner) {
