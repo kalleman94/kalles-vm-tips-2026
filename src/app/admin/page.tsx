@@ -44,7 +44,7 @@ export default function AdminPage() {
   const [participantsOpen, setParticipantsOpen] = useState(false)
 
   // Participant management
-  const [participantList, setParticipantList] = useState<{ id: string; name: string; pin_hash: string; total_points: number; group_points: number; knockout_points: number; bonus_points: number; adjustment_points: number; has_swished: boolean }[]>([])
+  const [participantList, setParticipantList] = useState<{ id: string; name: string; pin_hash: string; total_points: number; group_points: number; knockout_points: number; bonus_points: number; adjustment_points: number; has_swished: boolean; submitted_group: boolean; submitted_bonus: boolean; submitted_knockout: boolean }[]>([])
   const [deletingParticipantId, setDeletingParticipantId] = useState<string | null>(null)
   const [adjustmentEdits, setAdjustmentEdits] = useState<Record<string, string>>({})
   const [savingScore, setSavingScore] = useState<string | null>(null)
@@ -259,22 +259,43 @@ export default function AdminPage() {
   }
 
   async function loadParticipants() {
-    const [{ data: pData }, { data: sData }] = await Promise.all([
+    const [{ data: pData }, { data: sData }, { data: mData }, { data: predData }, { data: bonusData }] = await Promise.all([
       supabase.from('participants').select('id, name, pin_hash, has_swished').order('name'),
       supabase.from('scores').select('*'),
+      supabase.from('matches').select('id, phase'),
+      supabase.from('predictions').select('participant_id, match_id'),
+      supabase.from('bonus_answers').select('participant_id'),
     ])
     if (!pData) return
     const scoreMap: Record<string, any> = {}
     sData?.forEach((s: any) => { scoreMap[s.participant_id] = s })
-    const list = pData.map((p: any) => ({
-      id: p.id, name: p.name, pin_hash: p.pin_hash,
-      has_swished: p.has_swished ?? false,
-      total_points: scoreMap[p.id]?.total_points ?? 0,
-      group_points: scoreMap[p.id]?.group_points ?? 0,
-      knockout_points: scoreMap[p.id]?.knockout_points ?? 0,
-      bonus_points: scoreMap[p.id]?.bonus_points ?? 0,
-      adjustment_points: scoreMap[p.id]?.adjustment_points ?? 0,
-    }))
+
+    // Build sets of group/knockout match IDs
+    const groupIds = new Set((mData ?? []).filter((m: any) => m.phase === 'group').map((m: any) => m.id))
+    const knockoutIds = new Set((mData ?? []).filter((m: any) => m.phase !== 'group').map((m: any) => m.id))
+    // Build per-participant prediction sets
+    const predByParticipant: Record<string, Set<number>> = {}
+    predData?.forEach((p: any) => {
+      if (!predByParticipant[p.participant_id]) predByParticipant[p.participant_id] = new Set()
+      predByParticipant[p.participant_id].add(p.match_id)
+    })
+    const bonusSet = new Set((bonusData ?? []).map((b: any) => b.participant_id))
+
+    const list = pData.map((p: any) => {
+      const preds = predByParticipant[p.id] ?? new Set()
+      return {
+        id: p.id, name: p.name, pin_hash: p.pin_hash,
+        has_swished: p.has_swished ?? false,
+        submitted_group: [...preds].some(id => groupIds.has(id)),
+        submitted_bonus: bonusSet.has(p.id),
+        submitted_knockout: [...preds].some(id => knockoutIds.has(id)),
+        total_points: scoreMap[p.id]?.total_points ?? 0,
+        group_points: scoreMap[p.id]?.group_points ?? 0,
+        knockout_points: scoreMap[p.id]?.knockout_points ?? 0,
+        bonus_points: scoreMap[p.id]?.bonus_points ?? 0,
+        adjustment_points: scoreMap[p.id]?.adjustment_points ?? 0,
+      }
+    })
     setParticipantList(list)
     const edits: Record<string, string> = {}
     list.forEach((p: any) => { edits[p.id] = String(p.adjustment_points) })
@@ -699,6 +720,7 @@ export default function AdminPage() {
                     <th className="pb-2 pr-2 text-center text-purple-600">Justering</th>
                     <th className="pb-2 pr-2 text-center">Totalt</th>
                     <th className="pb-2 pr-2 text-center text-green-600">Swish</th>
+                    <th className="pb-2 pr-2 text-center" title="Inlämnat gruppspel / bonus / slutspel">Inlämnat</th>
                     <th className="pb-2"></th>
                   </tr>
                 </thead>
@@ -733,6 +755,13 @@ export default function AdminPage() {
                           >
                             {p.has_swished ? '✓' : '–'}
                           </button>
+                        </td>
+                        <td className="py-2 pr-2 text-center">
+                          <div className="flex gap-0.5 justify-center" title={`Grupp: ${p.submitted_group ? 'Ja' : 'Nej'} | Bonus: ${p.submitted_bonus ? 'Ja' : 'Nej'} | Slutspel: ${p.submitted_knockout ? 'Ja' : 'Nej'}`}>
+                            <span className={`text-xs px-1 rounded font-bold ${p.submitted_group ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>G</span>
+                            <span className={`text-xs px-1 rounded font-bold ${p.submitted_bonus ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>B</span>
+                            <span className={`text-xs px-1 rounded font-bold ${p.submitted_knockout ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>S</span>
+                          </div>
                         </td>
                         <td className="py-2 flex gap-1">
                           <button

@@ -520,6 +520,8 @@ function MatchRow({
             type="number" min={0} max={20}
             value={pred?.home_goals ?? ''}
             onChange={e => handleGoalChange('home_goals', e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const all = Array.from(document.querySelectorAll<HTMLElement>('[data-score-input]')); const i = all.indexOf(e.currentTarget as HTMLElement); all[i + 1]?.focus() } }}
+            data-score-input
             disabled={locked}
             className="w-10 text-center border border-gray-300 rounded px-1 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50 disabled:text-gray-400 text-sm"
           />
@@ -528,6 +530,8 @@ function MatchRow({
             type="number" min={0} max={20}
             value={pred?.away_goals ?? ''}
             onChange={e => handleGoalChange('away_goals', e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const all = Array.from(document.querySelectorAll<HTMLElement>('[data-score-input]')); const i = all.indexOf(e.currentTarget as HTMLElement); all[i + 1]?.focus() } }}
+            data-score-input
             disabled={locked}
             className="w-10 text-center border border-gray-300 rounded px-1 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50 disabled:text-gray-400 text-sm"
           />
