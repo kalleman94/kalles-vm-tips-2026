@@ -30,10 +30,9 @@ function buildResolvedTeams(
     if (!toMatch || !homeSource || !awaySource) continue
     const homeWinner = predictions[homeSource.id]?.predicted_winner
     const awayWinner = predictions[awaySource.id]?.predicted_winner
-    if (homeWinner && isPlaceholder(resolved[toMatch.id].home))
-      resolved[toMatch.id].home = homeWinner
-    if (awayWinner && isPlaceholder(resolved[toMatch.id].away))
-      resolved[toMatch.id].away = awayWinner
+    // Always show user's own predicted winner – never let admin's real teams override
+    if (homeWinner) resolved[toMatch.id].home = homeWinner
+    if (awayWinner) resolved[toMatch.id].away = awayWinner
   }
 
   // Bronze: losers of the two semi-finals (match numbers 101 and 102)
@@ -45,10 +44,8 @@ function buildResolvedTeams(
     const sf2r = resolved[sf2.id]
     const w1 = predictions[sf1.id]?.predicted_winner
     const w2 = predictions[sf2.id]?.predicted_winner
-    if (w1 && isPlaceholder(resolved[bronzeMatch.id].home))
-      resolved[bronzeMatch.id].home = w1 === sf1r.home ? sf1r.away : sf1r.home
-    if (w2 && isPlaceholder(resolved[bronzeMatch.id].away))
-      resolved[bronzeMatch.id].away = w2 === sf2r.home ? sf2r.away : sf2r.home
+    if (w1) resolved[bronzeMatch.id].home = w1 === sf1r.home ? sf1r.away : sf1r.home
+    if (w2) resolved[bronzeMatch.id].away = w2 === sf2r.home ? sf2r.away : sf2r.home
   }
 
   return resolved
