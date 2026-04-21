@@ -157,6 +157,13 @@ export default function TipsPage() {
   const knockoutMatches = matches.filter(m => PHASES_KNOCKOUT.includes(m.phase))
   const groups = [...new Set(groupMatches.map(m => m.group_name))].sort()
 
+  // Knockout matches with draw score but no winner selected
+  const incompleteKnockout = knockoutMatches.filter(m => {
+    const pred = predictions[m.id]
+    if (pred?.home_goals == null || pred?.away_goals == null) return false
+    return pred.home_goals === pred.away_goals && !pred.predicted_winner
+  })
+
   const resolvedTeams = useMemo(
     () => buildResolvedTeams(matches, predictions),
     [matches, predictions]
@@ -265,10 +272,15 @@ export default function TipsPage() {
       </div>
 
       {/* Sticky save button */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 flex justify-center px-4 py-3 bg-white/80 backdrop-blur border-t border-gray-200 shadow-lg">
+      <div className="fixed bottom-0 left-0 right-0 z-50 flex flex-col items-center px-4 py-3 bg-white/80 backdrop-blur border-t border-gray-200 shadow-lg gap-2">
+        {incompleteKnockout.length > 0 && (
+          <div className="w-full max-w-sm bg-amber-50 border border-amber-300 rounded-lg px-3 py-2 text-xs text-amber-800">
+            ⚠️ Du måste välja vinnare (Vidare/Vinnare) i {incompleteKnockout.length} slutspelsmatch{incompleteKnockout.length > 1 ? 'er' : ''} med oavgjort resultat innan du kan spara.
+          </div>
+        )}
         <button
           onClick={handleSave}
-          disabled={saving}
+          disabled={saving || incompleteKnockout.length > 0}
           className="w-full max-w-sm px-5 py-3 rounded-xl text-white font-semibold text-sm transition-all disabled:opacity-50 shadow-md"
           style={{ backgroundColor: saved ? 'var(--color-green)' : 'var(--color-primary)' }}
         >
