@@ -36,6 +36,10 @@ export async function POST() {
   const matchMap    = new Map(matches.map((m: any) => [m.id, m]))
   const matchByNum  = new Map(matches.map((m: any) => [m.match_number, m]))
 
+  // Preserve existing adjustments across recalculations
+  const { data: existingScores } = await supabase.from('scores').select('participant_id, adjustment_points')
+  const adjustmentMap = new Map(existingScores?.map((s: any) => [s.participant_id, s.adjustment_points ?? 0]) ?? [])
+
   // Gate: both source predicted_winners must match actual team names.
   // r32 uses simple check (teams come from group stage, no source predictions).
   function gatePass(match: any, preds: any[]): boolean {
@@ -107,12 +111,15 @@ export async function POST() {
       ? calculateBonusPoints(bonus, actualTopScorer, actualChampion, actualThirdPlace, DEFAULT_POINTS)
       : 0
 
+    const adjustment = adjustmentMap.get(p.id) ?? 0
+
     return {
       participant_id: p.id,
       group_points: groupPoints,
       knockout_points: knockoutPoints,
       bonus_points: bonusPoints,
-      total_points: groupPoints + knockoutPoints + bonusPoints,
+      adjustment_points: adjustment,
+      total_points: groupPoints + knockoutPoints + bonusPoints + adjustment,
     }
   })
 

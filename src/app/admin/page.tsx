@@ -44,9 +44,9 @@ export default function AdminPage() {
   const [participantsOpen, setParticipantsOpen] = useState(false)
 
   // Participant management
-  const [participantList, setParticipantList] = useState<{ id: string; name: string; pin_hash: string; total_points: number; group_points: number; knockout_points: number; bonus_points: number }[]>([])
+  const [participantList, setParticipantList] = useState<{ id: string; name: string; pin_hash: string; total_points: number; group_points: number; knockout_points: number; bonus_points: number; adjustment_points: number }[]>([])
   const [deletingParticipantId, setDeletingParticipantId] = useState<string | null>(null)
-  const [scoreEdits, setScoreEdits] = useState<Record<string, { total: string; group: string; knockout: string; bonus: string }>>({})
+  const [adjustmentEdits, setAdjustmentEdits] = useState<Record<string, string>>({})
   const [savingScore, setSavingScore] = useState<string | null>(null)
   const [savedScoreIds, setSavedScoreIds] = useState<string[]>([])
   const [clearingType, setClearingType] = useState<string | null>(null)
@@ -272,13 +272,12 @@ export default function AdminPage() {
       group_points: scoreMap[p.id]?.group_points ?? 0,
       knockout_points: scoreMap[p.id]?.knockout_points ?? 0,
       bonus_points: scoreMap[p.id]?.bonus_points ?? 0,
+      adjustment_points: scoreMap[p.id]?.adjustment_points ?? 0,
     }))
     setParticipantList(list)
-    const edits: Record<string, { total: string; group: string; knockout: string; bonus: string }> = {}
-    list.forEach((p: any) => {
-      edits[p.id] = { total: String(p.total_points), group: String(p.group_points), knockout: String(p.knockout_points), bonus: String(p.bonus_points) }
-    })
-    setScoreEdits(edits)
+    const edits: Record<string, string> = {}
+    list.forEach((p: any) => { edits[p.id] = String(p.adjustment_points) })
+    setAdjustmentEdits(edits)
   }
 
   async function deleteParticipant(id: string, name: string) {
@@ -290,14 +289,14 @@ export default function AdminPage() {
   }
 
   async function saveScore(participantId: string) {
-    const e = scoreEdits[participantId]
-    if (!e) return
+    const adj = adjustmentEdits[participantId]
+    if (adj === undefined) return
     setSavingScore(participantId)
-    const total = Number(e.total), group = Number(e.group), knockout = Number(e.knockout), bonus = Number(e.bonus)
     await supabase.from('scores').upsert(
-      { participant_id: participantId, total_points: total, group_points: group, knockout_points: knockout, bonus_points: bonus },
+      { participant_id: participantId, adjustment_points: Number(adj) },
       { onConflict: 'participant_id' }
     )
+    await fetch('/api/recalculate', { method: 'POST' })
     setSavingScore(null)
     setSavedScoreIds(prev => [...prev, participantId])
     setTimeout(() => setSavedScoreIds(prev => prev.filter(id => id !== participantId)), 3000)
@@ -678,8 +677,8 @@ export default function AdminPage() {
         </button>
         {participantsOpen && (
           <div className="p-4">
-            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 mb-4">
-              ⚠️ Manuella poängjusteringar skrivs över om du kör "beräkna poäng" igen.
+            <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded px-3 py-2 mb-4">
+              ℹ️ Grupp-, slutspels- och bonuspoäng beräknas automatiskt. Du kan lägga till eller dra av poäng via <strong>Justering</strong>.
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -690,28 +689,30 @@ export default function AdminPage() {
                     <th className="pb-2 pr-2 text-center">Grupp</th>
                     <th className="pb-2 pr-2 text-center">Slutspel</th>
                     <th className="pb-2 pr-2 text-center">Bonus</th>
+                    <th className="pb-2 pr-2 text-center text-purple-600">Justering</th>
                     <th className="pb-2 pr-2 text-center">Totalt</th>
                     <th className="pb-2"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {participantList.map(p => {
-                    const e = scoreEdits[p.id] ?? { total: '0', group: '0', knockout: '0', bonus: '0' }
                     const saved = savedScoreIds.includes(p.id)
                     return (
                       <tr key={p.id} className="text-xs">
                         <td className="py-2 pr-3 font-medium">{p.name}</td>
                         <td className="py-2 pr-3 font-mono text-gray-500">{p.pin_hash}</td>
-                        {(['group', 'knockout', 'bonus', 'total'] as const).map(field => (
-                          <td key={field} className="py-2 pr-2">
-                            <input
-                              type="number"
-                              value={e[field === 'group' ? 'group' : field === 'knockout' ? 'knockout' : field === 'bonus' ? 'bonus' : 'total']}
-                              onChange={ev => setScoreEdits(prev => ({ ...prev, [p.id]: { ...prev[p.id], [field === 'group' ? 'group' : field === 'knockout' ? 'knockout' : field === 'bonus' ? 'bonus' : 'total']: ev.target.value } }))}
-                              className="w-14 text-center border border-gray-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                            />
-                          </td>
-                        ))}
+                        <td className="py-2 pr-2 text-center text-gray-600">{p.group_points}</td>
+                        <td className="py-2 pr-2 text-center text-gray-600">{p.knockout_points}</td>
+                        <td className="py-2 pr-2 text-center text-gray-600">{p.bonus_points}</td>
+                        <td className="py-2 pr-2">
+                          <input
+                            type="number"
+                            value={adjustmentEdits[p.id] ?? '0'}
+                            onChange={ev => setAdjustmentEdits(prev => ({ ...prev, [p.id]: ev.target.value }))}
+                            className="w-16 text-center border border-purple-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-purple-400"
+                          />
+                        </td>
+                        <td className="py-2 pr-2 text-center font-semibold">{p.total_points}</td>
                         <td className="py-2 flex gap-1">
                           <button
                             onClick={() => saveScore(p.id)}
