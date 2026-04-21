@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { Match } from '@/lib/types'
 import { DEFAULT_INFO, DEFAULT_RULES } from '@/lib/defaults'
+import { WINNER_BRACKET, BRONZE_MATCH_NUM, BRONZE_SF1_NUM, BRONZE_SF2_NUM } from '@/lib/bracket'
 
 export default function AdminPage() {
   const supabase = createClient()
@@ -180,6 +181,57 @@ export default function AdminPage() {
     setSavedTeamIds(prev => [...prev, matchId])
     setTimeout(() => setSavedTeamIds(prev => prev.filter(id => id !== matchId)), 3000)
     setMatches(prev => prev.map(m => m.id === matchId ? { ...m, home_team: t.home.trim(), away_team: t.away.trim() } : m))
+  }
+
+  async function propagateWinner(matchNumber: number, winner: string, loser: string) {
+    const ops: Promise<any>[] = []
+    const entry = WINNER_BRACKET.find(b => b.home === matchNumber || b.away === matchNumber)
+    if (entry) {
+      const target = matches.find(m => m.match_number === entry.to)
+      if (target) {
+        const field = entry.home === matchNumber ? 'home_team' : 'away_team'
+        ops.push(supabase.from('matches').update({ [field]: winner }).eq('id', target.id))
+      }
+    }
+    if (matchNumber === BRONZE_SF1_NUM || matchNumber === BRONZE_SF2_NUM) {
+      const bronze = matches.find(m => m.match_number === BRONZE_MATCH_NUM)
+      if (bronze) {
+        const field = matchNumber === BRONZE_SF1_NUM ? 'home_team' : 'away_team'
+        ops.push(supabase.from('matches').update({ [field]: loser }).eq('id', bronze.id))
+      }
+    }
+    if (ops.length) await Promise.all(ops)
+  }
+
+  async function saveKnockoutResult(matchId: number) {
+    const r = results[matchId]
+    const t = teamEdits[matchId]
+    if (!r || r.home === '' || r.away === '') return
+    setSaving(matchId)
+    if (t?.home?.trim() && t?.away?.trim()) {
+      await supabase.from('matches')
+        .update({ home_team: t.home.trim(), away_team: t.away.trim() })
+        .eq('id', matchId)
+      setMatches(prev => prev.map(m => m.id === matchId
+        ? { ...m, home_team: t.home.trim(), away_team: t.away.trim() } : m))
+    }
+    const { error } = await supabase.from('match_results').upsert(
+      { match_id: matchId, home_goals: Number(r.home), away_goals: Number(r.away), winner: r.winner || null },
+      { onConflict: 'match_id' }
+    )
+    if (error) { setSaving(null); alert('Fel: ' + error.message); return }
+    const match = matches.find(m => m.id === matchId)
+    if (match && r.winner) {
+      const homeTeam = t?.home?.trim() || match.home_team
+      const awayTeam = t?.away?.trim() || match.away_team
+      const loser = r.winner === homeTeam ? awayTeam : homeTeam
+      await propagateWinner(match.match_number, r.winner, loser)
+    }
+    await fetch('/api/recalculate', { method: 'POST' })
+    await loadMatches()
+    setSaving(null)
+    setSavedIds(prev => [...prev, matchId])
+    setTimeout(() => setSavedIds(prev => prev.filter(id => id !== matchId)), 3000)
   }
 
   async function addParticipant(e: React.FormEvent) {
@@ -720,16 +772,14 @@ export default function AdminPage() {
           {knockoutResultsOpen && (
             <div>
               {knockoutMatches.map(m => (
-                <ResultRow key={m.id} match={m} result={results[m.id]}
+                <KnockoutResultRow key={m.id} match={m} result={results[m.id]}
                   saving={saving === m.id} saved={savedIds.includes(m.id)}
                   phase={phaseLabel[m.phase] ?? m.phase}
                   onChange={(field, val) => setResults(prev => ({ ...prev, [m.id]: { ...prev[m.id], [field]: val } }))}
-                  onSave={() => saveResult(m.id)} showWinner
+                  onSave={() => saveKnockoutResult(m.id)}
                   teamEdit={teamEdits[m.id]}
                   onTeamChange={(field, val) => setTeamEdits(prev => ({ ...prev, [m.id]: { ...prev[m.id], [field]: val } }))}
-                  onTeamSave={() => saveTeam(m.id)}
-                  savingTeam={savingTeam === m.id}
-                  savedTeam={savedTeamIds.includes(m.id)} />
+                />
               ))}
             </div>
           )}
@@ -742,8 +792,7 @@ export default function AdminPage() {
 function ResultRow({
   match, result, saving, saved, onChange, onSave, showWinner, phase,
   teamEdit, onTeamChange, onTeamSave, savingTeam, savedTeam
-}: {
-  match: Match
+}: {  match: Match
   result?: { home: string; away: string; winner: string }
   saving: boolean
   saved: boolean
@@ -819,6 +868,116 @@ function ResultRow({
           className="px-3 py-1 rounded text-white text-xs font-medium disabled:opacity-50 transition-colors shrink-0"
           style={{ backgroundColor: isSaved ? 'var(--color-green)' : 'var(--color-primary)' }}>
           {isSaving ? '...' : isSaved ? '✓' : 'Spara'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function KnockoutResultRow({
+  match, result, saving, saved, onChange, onSave, phase, teamEdit, onTeamChange
+}: {
+  match: Match
+  result?: { home: string; away: string; winner: string }
+  saving: boolean
+  saved: boolean
+  onChange: (field: 'home' | 'away' | 'winner', val: string) => void
+  onSave: () => void
+  phase?: string
+  teamEdit?: { home: string; away: string }
+  onTeamChange?: (field: 'home' | 'away', val: string) => void
+}) {
+  const homeGoals = result?.home ?? ''
+  const awayGoals = result?.away ?? ''
+  const currentWinner = result?.winner ?? ''
+  const isBronze = match.match_number === 103
+  const bothFilled = homeGoals !== '' && awayGoals !== ''
+  const isDraw = bothFilled && homeGoals === awayGoals
+  const homeTeam = teamEdit?.home ?? match.home_team
+  const awayTeam = teamEdit?.away ?? match.away_team
+
+  function handleGoalChange(field: 'home' | 'away', val: string) {
+    onChange(field, val)
+    const h = field === 'home' ? val : homeGoals
+    const a = field === 'away' ? val : awayGoals
+    if (h !== '' && a !== '') {
+      if (h !== a) {
+        onChange('winner', Number(h) > Number(a) ? homeTeam : awayTeam)
+      } else {
+        onChange('winner', '')
+      }
+    } else {
+      onChange('winner', '')
+    }
+  }
+
+  return (
+    <div className="px-4 py-3 text-sm border-b border-gray-100 last:border-0">
+      {/* Row 1: badges + date */}
+      <div className="flex items-center gap-2 flex-wrap mb-2">
+        {phase && <span className="text-xs bg-gray-100 rounded px-2 py-0.5 text-gray-600">{phase}</span>}
+        {match.match_number != null && (
+          <span className="text-xs bg-blue-100 text-blue-700 font-mono rounded px-2 py-0.5">M{match.match_number}</span>
+        )}
+        <span className="text-gray-400 text-xs leading-tight">
+          {new Date(match.match_date).toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm', month: 'short', day: 'numeric' })}
+          {' · '}
+          {new Date(match.match_date).toLocaleTimeString('sv-SE', { timeZone: 'Europe/Stockholm', hour: '2-digit', minute: '2-digit' })}
+        </span>
+      </div>
+
+      {/* Row 2: home – score – score – away */}
+      <div className="flex items-center justify-center gap-2">
+        {onTeamChange ? (
+          <input type="text" value={teamEdit?.home ?? ''} onChange={e => onTeamChange('home', e.target.value)}
+            className="w-0 flex-1 text-right border border-gray-300 rounded px-2 py-1 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-blue-400" />
+        ) : (
+          <span className="w-0 flex-1 text-right font-medium text-xs truncate">{homeTeam}</span>
+        )}
+        <input type="number" min={0} max={20} value={homeGoals}
+          onChange={e => handleGoalChange('home', e.target.value)}
+          className="w-10 shrink-0 text-center border border-gray-300 rounded px-1 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 text-sm" />
+        <span className="text-gray-400 shrink-0">–</span>
+        <input type="number" min={0} max={20} value={awayGoals}
+          onChange={e => handleGoalChange('away', e.target.value)}
+          className="w-10 shrink-0 text-center border border-gray-300 rounded px-1 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 text-sm" />
+        {onTeamChange ? (
+          <input type="text" value={teamEdit?.away ?? ''} onChange={e => onTeamChange('away', e.target.value)}
+            className="w-0 flex-1 border border-gray-300 rounded px-2 py-1 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-blue-400" />
+        ) : (
+          <span className="w-0 flex-1 font-medium text-xs truncate">{awayTeam}</span>
+        )}
+      </div>
+
+      {/* Row 3: auto-winner / Vidare buttons + save */}
+      <div className="flex items-center justify-between gap-2 mt-2">
+        <div className="flex-1 min-w-0">
+          {bothFilled && !isDraw && currentWinner && (
+            <span className="text-xs text-gray-500">→ <strong>{currentWinner}</strong></span>
+          )}
+          {isDraw && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-gray-500 shrink-0">{isBronze ? 'Vinnare:' : 'Vidare:'}</span>
+              {[homeTeam, awayTeam].map(team => (
+                <button key={team} type="button"
+                  onClick={() => onChange('winner', currentWinner === team ? '' : team)}
+                  className={`px-2 py-0.5 rounded text-xs font-medium border transition-colors ${
+                    currentWinner === team
+                      ? 'text-white border-transparent'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+                  style={currentWinner === team ? { backgroundColor: 'var(--color-accent)', borderColor: 'var(--color-accent)' } : {}}
+                >
+                  {team}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <button onClick={onSave} disabled={saving}
+          className="px-3 py-1 rounded text-white text-xs font-medium disabled:opacity-50 transition-colors shrink-0"
+          style={{ backgroundColor: saved ? 'var(--color-green)' : 'var(--color-primary)' }}>
+          {saving ? '...' : saved ? '✓' : 'Spara'}
         </button>
       </div>
     </div>
