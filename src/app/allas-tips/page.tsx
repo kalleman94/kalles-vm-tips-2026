@@ -14,6 +14,7 @@ export default function AllasTipsPage() {
   const [results, setResults] = useState<Record<number, MatchResult>>({})
   const [loading, setLoading] = useState(true)
   const [loadingTips, setLoadingTips] = useState(false)
+  const [downloading, setDownloading] = useState(false)
 
   useEffect(() => {
     supabase.from('participants').select('*').order('name').then(({ data }: { data: any }) => {
@@ -44,6 +45,63 @@ export default function AllasTipsPage() {
     setLoadingTips(false)
   }
 
+  async function downloadAllTips() {
+    setDownloading(true)
+    const [{ data: allPreds }, { data: allBonus }] = await Promise.all([
+      supabase.from('predictions').select('*'),
+      supabase.from('bonus_answers').select('*'),
+    ])
+
+    const predsByParticipant: Record<string, Record<number, Prediction>> = {}
+    allPreds?.forEach((p: Prediction) => {
+      if (!predsByParticipant[p.participant_id]) predsByParticipant[p.participant_id] = {}
+      predsByParticipant[p.participant_id][p.match_id] = p
+    })
+    const bonusByParticipant: Record<string, BonusAnswers> = {}
+    allBonus?.forEach((b: BonusAnswers) => { bonusByParticipant[b.participant_id] = b })
+
+    const phaseLabel: Record<string, string> = {
+      group: 'Grupp', r32: 'Sexton', r16: 'Åttondel', qf: 'Kvart', sf: 'Semi', bronze: 'Brons', final: 'Final'
+    }
+
+    // CSV header
+    const matchHeaders = matches.map(m => {
+      const date = new Date(m.match_date).toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm', month: 'short', day: 'numeric' })
+      const phase = phaseLabel[m.phase] ?? m.phase
+      return `"${phase}: ${m.home_team} vs ${m.away_team} (${date})"`
+    })
+    const headers = ['Deltagare', ...matchHeaders.map(h => h), 'VM-vinnare', 'Skyttekung', 'Bronsmatch']
+
+    // CSV rows
+    const rows = participants.map(p => {
+      const preds = predsByParticipant[p.id] ?? {}
+      const bonus = bonusByParticipant[p.id]
+      const matchCells = matches.map(m => {
+        const pred = preds[m.id]
+        if (!pred || pred.home_goals == null || pred.away_goals == null) return '–'
+        const score = `${pred.home_goals}-${pred.away_goals}`
+        return pred.predicted_winner ? `${score} (${pred.predicted_winner})` : score
+      })
+      return [
+        `"${p.name}"`,
+        ...matchCells.map(c => `"${c}"`),
+        `"${bonus?.champion ?? ''}"`,
+        `"${bonus?.top_scorer ?? ''}"`,
+        `"${bonus?.third_place ?? ''}"`,
+      ]
+    })
+
+    const csv = [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `vm-tips-2026.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    setDownloading(false)
+  }
+
   const selectedName = participants.find(p => p.id === selected)?.name
   const predMap: Record<number, Prediction> = {}
   predictions.forEach(p => { predMap[p.match_id] = p })
@@ -53,9 +111,19 @@ export default function AllasTipsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6" style={{ color: 'var(--color-primary)' }}>
-        Inlämnade tips
-      </h1>
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <h1 className="text-2xl font-bold" style={{ color: 'var(--color-primary)' }}>
+          Inlämnade tips
+        </h1>
+        <button
+          onClick={downloadAllTips}
+          disabled={downloading || matches.length === 0}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors disabled:opacity-50 shadow"
+          style={{ backgroundColor: 'var(--color-accent)' }}
+        >
+          {downloading ? '⏳ Laddar ner...' : '⬇️ Ladda ner allas tips'}
+        </button>
+      </div>
 
       {loading ? (
         <p className="text-gray-400">Laddar...</p>
