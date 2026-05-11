@@ -305,8 +305,11 @@ export default function AdminPage() {
   async function deleteParticipant(id: string, name: string) {
     if (!confirm(`Är du säker på att du vill ta bort ${name} och all deras data?`)) return
     setDeletingParticipantId(id)
-    await supabase.from('participants').delete().eq('id', id)
+    const { error } = await supabase.from('participants').delete().eq('id', id)
     setDeletingParticipantId(null)
+    if (error) {
+      alert(`Fel vid borttagning: ${error.message}`)
+    }
     loadParticipants()
   }
 
