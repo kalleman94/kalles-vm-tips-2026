@@ -32,20 +32,27 @@ export default function ScoreboardPage() {
   }
 
   async function fetchScores() {
-    const { data } = await supabase
-      .from('scores')
-      .select('*, participants(name)')
-      .order('total_points', { ascending: false })
-    if (data) {
-      setScores(data.map((row: any) => ({
-        participant_id: row.participant_id,
-        participant_name: row.participants?.name ?? '-',
-        total_points: row.total_points ?? 0,
-        group_points: row.group_points ?? 0,
-        knockout_points: row.knockout_points ?? 0,
-        bonus_points: row.bonus_points ?? 0,
-      })))
-    }
+    const [{ data: scoreData }, { data: participantData }] = await Promise.all([
+      supabase.from('scores').select('*, participants(name)'),
+      supabase.from('participants').select('id, name').order('name'),
+    ])
+
+    const scoreMap: Record<string, any> = {}
+    scoreData?.forEach((row: any) => { scoreMap[row.participant_id] = row })
+
+    const merged = (participantData ?? []).map((p: any) => {
+      const s = scoreMap[p.id]
+      return {
+        participant_id: p.id,
+        participant_name: p.name,
+        total_points: s?.total_points ?? 0,
+        group_points: s?.group_points ?? 0,
+        knockout_points: s?.knockout_points ?? 0,
+        bonus_points: s?.bonus_points ?? 0,
+      }
+    }).sort((a: ParticipantScore, b: ParticipantScore) => b.total_points - a.total_points)
+
+    setScores(merged)
     setLoading(false)
   }
 
