@@ -102,7 +102,7 @@ ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
 
 -- Participants: readable by all, writable only by authenticated (admin)
 CREATE POLICY "participants_select" ON participants FOR SELECT USING (true);
-CREATE POLICY "participants_insert" ON participants FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "participants_insert" ON participants FOR INSERT WITH CHECK (true);
 CREATE POLICY "participants_update" ON participants FOR UPDATE USING (auth.role() = 'authenticated');
 CREATE POLICY "participants_delete" ON participants FOR DELETE USING (auth.role() = 'authenticated');
 
