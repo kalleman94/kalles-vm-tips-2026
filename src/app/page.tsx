@@ -14,6 +14,17 @@ export default function ScoreboardPage() {
   const supabase = createClient()
 
   useEffect(() => {
+    if (!infoContent) return
+    const container = document.querySelector('.content-area')
+    if (!container) return
+    container.querySelectorAll('script').forEach(oldScript => {
+      const newScript = document.createElement('script')
+      newScript.textContent = oldScript.textContent
+      oldScript.replaceWith(newScript)
+    })
+  }, [infoContent])
+
+  useEffect(() => {
     fetchScores()
     fetchInfo()
     const channel = supabase
