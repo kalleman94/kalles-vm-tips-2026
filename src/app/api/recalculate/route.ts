@@ -7,16 +7,34 @@ import { WINNER_BRACKET, BRONZE_MATCH_NUM, BRONZE_SF1_NUM, BRONZE_SF2_NUM, isPla
 export async function POST() {
   const supabase = await createServerSupabaseClient()
 
+  // Fetch predictions with pagination to avoid Supabase's 1000-row default limit
+  const fetchAllPredictions = async () => {
+    const batchSize = 1000
+    let all: any[] = []
+    let from = 0
+    while (true) {
+      const { data } = await supabase
+        .from('predictions')
+        .select('*')
+        .range(from, from + batchSize - 1)
+      if (!data || data.length === 0) break
+      all = all.concat(data)
+      if (data.length < batchSize) break
+      from += batchSize
+    }
+    return all
+  }
+
   const [
     { data: participants },
     { data: results },
-    { data: allPredictions },
+    allPredictions,
     { data: allBonus },
     { data: matches },
   ] = await Promise.all([
     supabase.from('participants').select('id'),
     supabase.from('match_results').select('*, matches(phase)'),
-    supabase.from('predictions').select('*'),
+    fetchAllPredictions(),
     supabase.from('bonus_answers').select('*'),
     supabase.from('matches').select('*'),
   ])

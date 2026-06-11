@@ -152,8 +152,23 @@ export default function AdminPage() {
 
   async function saveResult(matchId: number) {
     const r = results[matchId]
-    if (r.home === '' || r.away === '') return
     setSaving(matchId)
+
+    // Both fields empty = clear the result
+    if (r.home === '' && r.away === '') {
+      const { error } = await supabase.from('match_results').delete().eq('match_id', matchId)
+      setSaving(null)
+      if (error) { alert('Kunde inte ta bort resultat: ' + error.message); return }
+      await fetch('/api/recalculate', { method: 'POST' })
+      await loadMatches()
+      setSavedIds(prev => [...prev, matchId])
+      setTimeout(() => setSavedIds(prev => prev.filter(id => id !== matchId)), 3000)
+      return
+    }
+
+    // One field empty = incomplete, do nothing
+    if (r.home === '' || r.away === '') { setSaving(null); return }
+
     const { error } = await supabase.from('match_results').upsert(
       { match_id: matchId, home_goals: Number(r.home), away_goals: Number(r.away), winner: r.winner || null },
       { onConflict: 'match_id' }
@@ -258,12 +273,29 @@ export default function AdminPage() {
     setTimeout(() => setParticipantMsg(''), 4000)
   }
 
+  async function fetchAllPredictions() {
+    const batchSize = 1000
+    let all: any[] = []
+    let from = 0
+    while (true) {
+      const { data } = await supabase
+        .from('predictions')
+        .select('participant_id, match_id')
+        .range(from, from + batchSize - 1)
+      if (!data || data.length === 0) break
+      all = all.concat(data)
+      if (data.length < batchSize) break
+      from += batchSize
+    }
+    return all
+  }
+
   async function loadParticipants() {
-    const [{ data: pData }, { data: sData }, { data: mData }, { data: predData }, { data: bonusData }] = await Promise.all([
+    const [{ data: pData }, { data: sData }, { data: mData }, predData, { data: bonusData }] = await Promise.all([
       supabase.from('participants').select('id, name, pin_hash, has_swished').order('name'),
       supabase.from('scores').select('*'),
       supabase.from('matches').select('id, phase'),
-      supabase.from('predictions').select('participant_id, match_id'),
+      fetchAllPredictions(),
       supabase.from('bonus_answers').select('participant_id'),
     ])
     if (!pData) return
