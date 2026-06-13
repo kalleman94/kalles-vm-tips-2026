@@ -1,6 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 import { useEffect, useState } from 'react'
+import * as XLSX from 'xlsx'
 import { createClient } from '@/lib/supabase'
 import { Participant, Match, Prediction, BonusAnswers, MatchResult, DEFAULT_POINTS } from '@/lib/types'
 
@@ -47,8 +48,27 @@ export default function AllasTipsPage() {
 
   async function downloadAllTips() {
     setDownloading(true)
-    const [{ data: allPreds }, { data: allBonus }] = await Promise.all([
-      supabase.from('predictions').select('*'),
+
+    // Fetch all predictions with pagination to avoid 1000-row server limit
+    const fetchAllPredictions = async () => {
+      const batchSize = 1000
+      let all: any[] = []
+      let from = 0
+      while (true) {
+        const { data } = await supabase
+          .from('predictions')
+          .select('*')
+          .range(from, from + batchSize - 1)
+        if (!data || data.length === 0) break
+        all = all.concat(data)
+        if (data.length < batchSize) break
+        from += batchSize
+      }
+      return all
+    }
+
+    const [allPreds, { data: allBonus }] = await Promise.all([
+      fetchAllPredictions(),
       supabase.from('bonus_answers').select('*'),
     ])
 
@@ -64,39 +84,71 @@ export default function AllasTipsPage() {
       group: 'Grupp', r32: 'Sexton', r16: 'Åttondel', qf: 'Kvart', sf: 'Semi', bronze: 'Brons', final: 'Final'
     }
 
-    // CSV header
-    const matchHeaders = matches.map(m => {
-      const date = new Date(m.match_date).toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm', month: 'short', day: 'numeric' })
-      const phase = phaseLabel[m.phase] ?? m.phase
-      return `"${phase}: ${m.home_team} vs ${m.away_team} (${date})"`
-    })
-    const headers = ['Deltagare', ...matchHeaders.map(h => h), 'VM-vinnare', 'Skyttekung', 'Bronsmatch']
+    const wb = XLSX.utils.book_new()
+    const groupMatches = matches.filter(m => m.phase === 'group')
+    const koMatches = matches.filter(m => m.phase !== 'group')
 
-    // CSV rows
-    const rows = participants.map(p => {
-      const preds = predsByParticipant[p.id] ?? {}
-      const bonus = bonusByParticipant[p.id]
-      const matchCells = matches.map(m => {
+    participants.forEach(participant => {
+      const preds = predsByParticipant[participant.id] ?? {}
+      const bonus = bonusByParticipant[participant.id]
+      const rows: (string | number)[][] = []
+
+      // Bonus questions
+      rows.push(['Bonusfrågor', '', ''])
+      rows.push(['VM-vinnare', bonus?.champion || '–', ''])
+      rows.push(['Skyttekung', bonus?.top_scorer || '–', ''])
+      rows.push(['Bronsmatch', bonus?.third_place || '–', ''])
+      rows.push([])
+
+      // Group stage header
+      rows.push(['Grupp', 'Hemmalag', 'Tips', 'Bortalag'])
+      groupMatches.forEach(m => {
         const pred = preds[m.id]
-        if (!pred || pred.home_goals == null || pred.away_goals == null) return '–'
-        const score = `${pred.home_goals}-${pred.away_goals}`
-        return pred.predicted_winner ? `${score} (${pred.predicted_winner})` : score
+        const tips = (pred && pred.home_goals != null && pred.away_goals != null)
+          ? `${pred.home_goals} – ${pred.away_goals}`
+          : '–'
+        rows.push([`Grupp ${m.group_name ?? ''}`, m.home_team, tips, m.away_team])
       })
-      return [
-        `"${p.name}"`,
-        ...matchCells.map(c => `"${c}"`),
-        `"${bonus?.champion ?? ''}"`,
-        `"${bonus?.top_scorer ?? ''}"`,
-        `"${bonus?.third_place ?? ''}"`,
+
+      rows.push([])
+
+      // Knockout stage header
+      if (koMatches.length > 0) {
+        rows.push(['Omgång', 'Hemmalag', 'Tips', 'Bortalag', 'Vinnartips'])
+        koMatches.forEach(m => {
+          const pred = preds[m.id]
+          const tips = (pred && pred.home_goals != null && pred.away_goals != null)
+            ? `${pred.home_goals} – ${pred.away_goals}`
+            : '–'
+          rows.push([
+            phaseLabel[m.phase] ?? m.phase,
+            m.home_team,
+            tips,
+            m.away_team,
+            pred?.predicted_winner || '–',
+          ])
+        })
+      }
+
+      const ws = XLSX.utils.aoa_to_sheet(rows)
+      ws['!cols'] = [
+        { wch: 14 }, // Grupp/Omgång
+        { wch: 22 }, // Hemmalag
+        { wch: 8 },  // Tips
+        { wch: 22 }, // Bortalag
+        { wch: 22 }, // Vinnartips
       ]
+
+      const sheetName = participant.name.replace(/[/\\?*[\]:]/g, '').substring(0, 31)
+      XLSX.utils.book_append_sheet(wb, ws, sheetName)
     })
 
-    const csv = [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n')
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+    const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+    const blob = new Blob([buf], { type: 'application/octet-stream' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `vm-tips-2026.csv`
+    a.download = 'vm-tips-2026.xlsx'
     a.click()
     URL.revokeObjectURL(url)
     setDownloading(false)
@@ -211,6 +263,11 @@ export default function AllasTipsPage() {
                                     <PointsBadge info={getMatchPointInfo(p, results[m.id], m)} />
                                   </div>
                                 </div>
+                                {results[m.id] && (
+                                  <div className="mt-1 text-xs text-center text-gray-400">
+                                   Facit: <span className="font-medium text-gray-500">{results[m.id].home_goals} – {results[m.id].away_goals}</span>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -251,6 +308,11 @@ export default function AllasTipsPage() {
                                     <PointsBadge info={getMatchPointInfo(p, results[m.id], m)} />
                                   </div>
                                 </div>
+                                {results[m.id] && (
+                                  <div className="mt-1 text-xs text-center text-gray-400">
+                                    Facit: <span className="font-medium text-gray-500">{results[m.id].home_goals} – {results[m.id].away_goals}</span>
+                                  </div>
+                                )}
                                 {p?.predicted_winner && (
                                   <div className="mt-1 text-xs text-gray-500 text-center sm:text-left sm:pl-[calc(33.333%+0.75rem)]">
                                     → {p.predicted_winner}

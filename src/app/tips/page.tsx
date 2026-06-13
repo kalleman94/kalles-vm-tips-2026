@@ -538,6 +538,11 @@ function MatchRow({
         <span className="w-0 flex-1 font-medium text-xs truncate">{awayTeam}</span>
         <div className="shrink-0"><PointsBadge info={info} /></div>
       </div>
+      {result && (
+        <div className="mt-1 text-xs text-center text-gray-400">
+          Facit: <span className="font-medium text-gray-500">{result.home_goals} – {result.away_goals}</span>
+        </div>
+      )}
           {showWinner && isDraw && (
             <div className="mt-2 flex items-center gap-2 flex-wrap">
               <span className="text-xs text-gray-500 shrink-0">
