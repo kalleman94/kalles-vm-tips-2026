@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { getLockStatus } from '@/lib/lock'
+
 import { Match, Prediction, BonusAnswers, LockStatus, MatchResult, DEFAULT_POINTS } from '@/lib/types'
 import { WINNER_BRACKET, BRONZE_MATCH_NUM, BRONZE_SF1_NUM, BRONZE_SF2_NUM, isPlaceholderName } from '@/lib/bracket'
 
@@ -75,7 +75,6 @@ export default function TipsPage() {
     if (!id) { router.push('/login'); return }
     setParticipantId(id)
     setParticipantName(name ?? '')
-    setLockStatus(getLockStatus())
     loadData(id)
     // Load has_swished for this participant
     createClient().from('participants').select('has_swished').eq('id', id).maybeSingle()
@@ -91,14 +90,14 @@ export default function TipsPage() {
         setKnockoutEnabled(map['knockout_enabled'] === 'true')
         if (map['knockout_enabled'] === 'true') setActiveTab('knockout')
         setRandomEnabled(map['random_enabled'] === 'true')
-        // Manual locks override time-based locks
-        setLockStatus(prev => ({
-          groupLocked: prev?.groupLocked || map['group_locked'] === 'true',
-          knockoutLocked: prev?.knockoutLocked || map['knockout_locked'] === 'true',
+        // Lock status controlled exclusively by admin DB settings
+        setLockStatus({
+          groupLocked: map['group_locked'] === 'true',
+          knockoutLocked: map['knockout_locked'] === 'true',
           bonusLocked: map['bonus_locked'] === 'true',
-          groupLockTime: prev?.groupLockTime ?? '',
-          knockoutLockTime: prev?.knockoutLockTime ?? '',
-        }))
+          groupLockTime: '',
+          knockoutLockTime: '',
+        })
       })
   }, [])
 
