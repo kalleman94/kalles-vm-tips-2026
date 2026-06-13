@@ -4,10 +4,10 @@ export const WINNER_BRACKET: Array<{ to: number; home: number; away: number }> =
   // Åttondelsfinaler (R16)
   { to: 89, home: 74, away: 77 },
   { to: 90, home: 73, away: 75 },
-  { to: 91, home: 83, away: 84 },
-  { to: 92, home: 81, away: 82 },
-  { to: 93, home: 76, away: 78 },
-  { to: 94, home: 79, away: 80 },
+  { to: 91, home: 76, away: 78 },
+  { to: 92, home: 79, away: 80 },
+  { to: 93, home: 83, away: 84 },
+  { to: 94, home: 81, away: 82 },
   { to: 95, home: 86, away: 88 },
   { to: 96, home: 85, away: 87 },
   // Kvartsfinaler (QF)
