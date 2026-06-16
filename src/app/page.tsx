@@ -1,16 +1,84 @@
 'use client'
 export const dynamic = 'force-dynamic'
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
-import { ParticipantScore } from '@/lib/types'
-
+import { ParticipantScore, Match, Prediction, MatchResult } from '@/lib/types'
 import { DEFAULT_INFO } from '@/lib/defaults'
+
+function UpcomingTips({
+  participantId,
+  upcomingMatches,
+  predictions,
+  isLoading,
+}: {
+  participantId: string
+  upcomingMatches: Match[]
+  predictions: Prediction[]
+  isLoading: boolean
+}) {
+  const predMap: Record<number, Prediction> = {}
+  predictions.forEach(p => { predMap[p.match_id] = p })
+
+  return (
+    <div className="px-4 py-3 bg-blue-50 border-t">
+      {isLoading ? (
+        <p className="text-sm text-gray-400 py-1">Laddar tips...</p>
+      ) : upcomingMatches.length === 0 ? (
+        <p className="text-sm text-gray-500 py-1">Inga kommande matcher.</p>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">4 kommande matcher</p>
+          {upcomingMatches.map(m => {
+            const pred = predMap[m.id]
+            const hasTip = pred && pred.home_goals != null && pred.away_goals != null
+            const tip = hasTip ? `${pred.home_goals} – ${pred.away_goals}` : '? – ?'
+            return (
+              <div key={m.id} className="flex items-center justify-between text-sm gap-3">
+                <div className="flex items-center gap-2 text-gray-600 min-w-0">
+                  <span className="text-xs text-gray-400 shrink-0 w-14">
+                    {new Date(m.match_date).toLocaleDateString('sv-SE', {
+                      timeZone: 'Europe/Stockholm', month: 'short', day: 'numeric',
+                    })}
+                  </span>
+                  <span className="truncate">{m.home_team}</span>
+                  <span className="text-gray-400 shrink-0">–</span>
+                  <span className="truncate">{m.away_team}</span>
+                </div>
+                <span
+                  className="font-mono font-bold shrink-0"
+                  style={{ color: hasTip ? 'var(--color-primary)' : '#9ca3af' }}
+                >
+                  {tip}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+      <div className="mt-3 pt-2 border-t border-blue-100">
+        <Link
+          href={`/allas-tips?participant=${participantId}`}
+          className="text-xs font-semibold hover:underline"
+          style={{ color: 'var(--color-primary)' }}
+        >
+          Se alla tips →
+        </Link>
+      </div>
+    </div>
+  )
+}
 
 export default function ScoreboardPage() {
   const [scores, setScores] = useState<ParticipantScore[]>([])
   const [loading, setLoading] = useState(true)
   const [infoContent, setInfoContent] = useState('')
   const [infoVisible, setInfoVisible] = useState(false)
+  const [matches, setMatches] = useState<Match[]>([])
+  const [matchResults, setMatchResults] = useState<Record<number, MatchResult>>({})
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [dropdownCache, setDropdownCache] = useState<Record<string, Prediction[]>>({})
+  const [loadingDropdown, setLoadingDropdown] = useState<string | null>(null)
   const supabase = createClient()
 
   useEffect(() => {
@@ -27,6 +95,7 @@ export default function ScoreboardPage() {
   useEffect(() => {
     fetchScores()
     fetchInfo()
+    fetchMatchData()
     const channel = supabase
       .channel('scores')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'scores' }, fetchScores)
@@ -40,6 +109,19 @@ export default function ScoreboardPage() {
     data?.forEach((s: any) => { map[s.key] = s.value })
     setInfoContent(map['info_box_content'] ?? DEFAULT_INFO)
     setInfoVisible(map['info_box_visible'] === 'true')
+  }
+
+  async function fetchMatchData() {
+    const [{ data: matchData }, { data: resultData }] = await Promise.all([
+      supabase.from('matches').select('*').order('match_date'),
+      supabase.from('match_results').select('*'),
+    ])
+    if (matchData) setMatches(matchData)
+    if (resultData) {
+      const map: Record<number, MatchResult> = {}
+      resultData.forEach((r: MatchResult) => { map[r.match_id] = r })
+      setMatchResults(map)
+    }
   }
 
   async function fetchScores() {
@@ -67,6 +149,21 @@ export default function ScoreboardPage() {
     setLoading(false)
   }
 
+  async function toggleDropdown(participantId: string) {
+    if (expandedId === participantId) {
+      setExpandedId(null)
+      return
+    }
+    setExpandedId(participantId)
+    if (!dropdownCache[participantId]) {
+      setLoadingDropdown(participantId)
+      const { data } = await supabase.from('predictions').select('*').eq('participant_id', participantId)
+      setDropdownCache(prev => ({ ...prev, [participantId]: data ?? [] }))
+      setLoadingDropdown(null)
+    }
+  }
+
+  const upcomingMatches = matches.filter(m => !matchResults[m.id]).slice(0, 4)
   const medal = (i: number) => i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`
 
   return (
@@ -92,6 +189,7 @@ export default function ScoreboardPage() {
         </div>
       ) : (
         <div className="bg-white rounded-xl shadow overflow-hidden">
+          {/* Desktop table */}
           <table className="w-full hidden md:table">
             <thead>
               <tr style={{ backgroundColor: 'var(--color-primary)' }} className="text-white text-sm">
@@ -105,29 +203,71 @@ export default function ScoreboardPage() {
             </thead>
             <tbody>
               {scores.map((s, i) => (
-                <tr key={s.participant_id} className={`border-t ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors`}>
-                  <td className="px-4 py-3 text-lg">{medal(i)}</td>
-                  <td className="px-4 py-3 font-medium">{s.participant_name}</td>
-                  <td className="px-4 py-3 text-right text-gray-600">{s.group_points}</td>
-                  <td className="px-4 py-3 text-right text-gray-600">{s.knockout_points}</td>
-                  <td className="px-4 py-3 text-right text-gray-600">{s.bonus_points}</td>
-                  <td className="px-4 py-3 text-right font-bold text-lg" style={{ color: 'var(--color-primary)' }}>
-                    {s.total_points}
-                  </td>
-                </tr>
+                <Fragment key={s.participant_id}>
+                  <tr
+                    onClick={() => toggleDropdown(s.participant_id)}
+                    className={`border-t cursor-pointer select-none ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors`}
+                  >
+                    <td className="px-4 py-3 text-lg">{medal(i)}</td>
+                    <td className="px-4 py-3 font-medium">
+                      <span className="flex items-center gap-1">
+                        {s.participant_name}
+                        <span className="text-gray-400 text-xs ml-1">
+                          {expandedId === s.participant_id ? '▲' : '▼'}
+                        </span>
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right text-gray-600">{s.group_points}</td>
+                    <td className="px-4 py-3 text-right text-gray-600">{s.knockout_points}</td>
+                    <td className="px-4 py-3 text-right text-gray-600">{s.bonus_points}</td>
+                    <td className="px-4 py-3 text-right font-bold text-lg" style={{ color: 'var(--color-primary)' }}>
+                      {s.total_points}
+                    </td>
+                  </tr>
+                  {expandedId === s.participant_id && (
+                    <tr>
+                      <td colSpan={6} className="p-0">
+                        <UpcomingTips
+                          participantId={s.participant_id}
+                          upcomingMatches={upcomingMatches}
+                          predictions={dropdownCache[s.participant_id] ?? []}
+                          isLoading={loadingDropdown === s.participant_id}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
             </tbody>
           </table>
+
+          {/* Mobile list */}
           <div className="md:hidden divide-y">
             {scores.map((s, i) => (
-              <div key={s.participant_id} className="flex items-center justify-between px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <span className="text-xl w-8">{medal(i)}</span>
-                  <span className="font-medium">{s.participant_name}</span>
+              <div key={s.participant_id}>
+                <div
+                  onClick={() => toggleDropdown(s.participant_id)}
+                  className="flex items-center justify-between px-4 py-3 cursor-pointer select-none active:bg-blue-50"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl w-8">{medal(i)}</span>
+                    <span className="font-medium">{s.participant_name}</span>
+                    <span className="text-gray-400 text-xs">
+                      {expandedId === s.participant_id ? '▲' : '▼'}
+                    </span>
+                  </div>
+                  <span className="font-bold text-xl" style={{ color: 'var(--color-primary)' }}>
+                    {s.total_points} p
+                  </span>
                 </div>
-                <span className="font-bold text-xl" style={{ color: 'var(--color-primary)' }}>
-                  {s.total_points} p
-                </span>
+                {expandedId === s.participant_id && (
+                  <UpcomingTips
+                    participantId={s.participant_id}
+                    upcomingMatches={upcomingMatches}
+                    predictions={dropdownCache[s.participant_id] ?? []}
+                    isLoading={loadingDropdown === s.participant_id}
+                  />
+                )}
               </div>
             ))}
           </div>

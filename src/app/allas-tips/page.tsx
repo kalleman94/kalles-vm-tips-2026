@@ -1,12 +1,14 @@
 'use client'
 export const dynamic = 'force-dynamic'
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import * as XLSX from 'xlsx'
 import { createClient } from '@/lib/supabase'
 import { Participant, Match, Prediction, BonusAnswers, MatchResult, DEFAULT_POINTS } from '@/lib/types'
 
-export default function AllasTipsPage() {
+function AllasTipsPageInner() {
   const supabase = createClient()
+  const searchParams = useSearchParams()
   const [participants, setParticipants] = useState<Participant[]>([])
   const [selected, setSelected] = useState<string | null>(null)
   const [matches, setMatches] = useState<Match[]>([])
@@ -33,6 +35,14 @@ export default function AllasTipsPage() {
       }
     })
   }, [])
+
+  // Auto-select participant from URL param (e.g. from scoreboard dropdown link)
+  useEffect(() => {
+    const paramId = searchParams.get('participant')
+    if (paramId && participants.length > 0 && !selected) {
+      selectParticipant(paramId)
+    }
+  }, [participants, searchParams])
 
   async function selectParticipant(id: string) {
     setSelected(id)
@@ -332,6 +342,14 @@ export default function AllasTipsPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function AllasTipsPage() {
+  return (
+    <Suspense fallback={<div className="text-center py-16 text-gray-400">Laddar...</div>}>
+      <AllasTipsPageInner />
+    </Suspense>
   )
 }
 
