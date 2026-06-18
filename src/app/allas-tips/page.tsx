@@ -197,7 +197,33 @@ function AllasTipsPageInner() {
               <div className="px-4 py-2 text-xs font-bold text-white" style={{ backgroundColor: 'var(--color-primary)' }}>
                 Deltagare
               </div>
-              <div className="divide-y max-h-[60vh] overflow-y-auto">
+              {/* Mobile: compact selector when participant is chosen */}
+              {selected ? (
+                <div className="md:hidden divide-y">
+                  <button
+                    onClick={() => { setSelected(null); setPredictions([]); setBonus(null) }}
+                    className="w-full text-left px-4 py-3 text-sm font-semibold flex items-center justify-between"
+                    style={{ backgroundColor: '#EEF2FF', color: 'var(--color-primary)' }}
+                  >
+                    <span>{participants.find(p => p.id === selected)?.name}</span>
+                    <span className="text-xs font-normal text-gray-400">Byt ▼</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="md:hidden divide-y max-h-[40vh] overflow-y-auto">
+                  {participants.map(p => (
+                    <button
+                      key={p.id}
+                      onClick={() => selectParticipant(p.id)}
+                      className="w-full text-left px-4 py-3 text-sm hover:bg-gray-50 transition-colors"
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {/* Desktop: always full list */}
+              <div className="hidden md:block divide-y max-h-[60vh] overflow-y-auto">
                 {participants.map(p => (
                   <button
                     key={p.id}
