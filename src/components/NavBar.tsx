@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation'
 
 const links = [
   { href: '/', label: 'Scoreboard', mobileLabel: 'Scoreboard' },
+  { href: '/idag', label: 'Idag', mobileLabel: 'Idag' },
   { href: '/tips', label: 'Mitt tips', mobileLabel: 'Mitt tips' },
   { href: '/allas-tips', label: 'Inlämnade tips', mobileLabel: 'Alla tips' },
   { href: '/regler', label: 'Regler', mobileLabel: 'Regler' },

@@ -6,51 +6,86 @@ import { createClient } from '@/lib/supabase'
 import { ParticipantScore, Match, Prediction, MatchResult } from '@/lib/types'
 import { DEFAULT_INFO } from '@/lib/defaults'
 
-function UpcomingTips({
+function TodaysTips({
   participantId,
-  upcomingMatches,
+  todaysMatches,
+  matchResults,
   predictions,
   isLoading,
 }: {
   participantId: string
-  upcomingMatches: Match[]
+  todaysMatches: Match[]
+  matchResults: Record<number, MatchResult>
   predictions: Prediction[]
   isLoading: boolean
 }) {
   const predMap: Record<number, Prediction> = {}
   predictions.forEach(p => { predMap[p.match_id] = p })
 
+  const isKnockout = (phase: string) => phase !== 'group'
+
   return (
     <div className="px-4 py-3 bg-blue-50 border-t">
       {isLoading ? (
         <p className="text-sm text-gray-400 py-1">Laddar tips...</p>
-      ) : upcomingMatches.length === 0 ? (
-        <p className="text-sm text-gray-500 py-1">Inga kommande matcher.</p>
+      ) : todaysMatches.length === 0 ? (
+        <p className="text-sm text-gray-500 py-1">Inga matcher idag.</p>
       ) : (
         <div className="space-y-2">
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">4 kommande matcher</p>
-          {upcomingMatches.map(m => {
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Dagens matcher</p>
+          {todaysMatches.map(m => {
             const pred = predMap[m.id]
+            const result = matchResults[m.id]
             const hasTip = pred && pred.home_goals != null && pred.away_goals != null
-            const tip = hasTip ? `${pred.home_goals} – ${pred.away_goals}` : '? – ?'
+            const tipScore = hasTip ? `${pred.home_goals} – ${pred.away_goals}` : '? – ?'
+            const knockout = isKnockout(m.phase)
+            const predictedWinner = pred?.predicted_winner
+
+            let correctGoals = 0
+            let checkmark = ''
+            if (result && hasTip) {
+              if (pred.home_goals === result.home_goals) correctGoals++
+              if (pred.away_goals === result.away_goals) correctGoals++
+              const predSign = pred.home_goals! > pred.away_goals! ? '1' : pred.home_goals! < pred.away_goals! ? '2' : 'X'
+              const resSign = result.home_goals > result.away_goals ? '1' : result.home_goals < result.away_goals ? '2' : 'X'
+              const rightSign = predSign === resSign
+              if (correctGoals === 2 && rightSign) checkmark = '✅'
+              else if (rightSign || correctGoals > 0) checkmark = '〰️'
+              else checkmark = '❌'
+            }
+
             return (
-              <div key={m.id} className="flex items-center justify-between text-sm gap-3">
-                <div className="flex items-center gap-2 text-gray-600 min-w-0">
-                  <span className="text-xs text-gray-400 shrink-0 w-14">
-                    {new Date(m.match_date).toLocaleDateString('sv-SE', {
-                      timeZone: 'Europe/Stockholm', month: 'short', day: 'numeric',
-                    })}
-                  </span>
-                  <span className="truncate">{m.home_team}</span>
-                  <span className="text-gray-400 shrink-0">–</span>
-                  <span className="truncate">{m.away_team}</span>
+              <div key={m.id} className="text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-gray-600 min-w-0">
+                    <span className="text-xs text-gray-400 shrink-0 w-14">
+                      {new Date(m.match_date).toLocaleDateString('sv-SE', {
+                        timeZone: 'Europe/Stockholm', month: 'short', day: 'numeric',
+                      })}
+                    </span>
+                    <span className="truncate">{m.home_team}</span>
+                    <span className="text-gray-400 shrink-0">–</span>
+                    <span className="truncate">{m.away_team}</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="font-mono font-bold" style={{ color: hasTip ? 'var(--color-primary)' : '#9ca3af' }}>
+                      {tipScore}
+                    </span>
+                    {result && (
+                      <span className="text-xs text-gray-500">
+                        ({result.home_goals}–{result.away_goals} {checkmark})
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <span
-                  className="font-mono font-bold shrink-0"
-                  style={{ color: hasTip ? 'var(--color-primary)' : '#9ca3af' }}
-                >
-                  {tip}
-                </span>
+                {knockout && predictedWinner && (
+                  <div className="ml-16 text-xs text-gray-500 mt-0.5">
+                    Vinnare: <span className="font-medium" style={{ color: 'var(--color-primary)' }}>{predictedWinner}</span>
+                    {result?.winner && (
+                      <span className="ml-1">{predictedWinner === result.winner ? '✅' : '❌'}</span>
+                    )}
+                  </div>
+                )}
               </div>
             )
           })}
@@ -58,11 +93,11 @@ function UpcomingTips({
       )}
       <div className="mt-3 pt-2 border-t border-blue-100">
         <Link
-          href={`/allas-tips?participant=${participantId}`}
+          href={`/idag`}
           className="text-xs font-semibold hover:underline"
           style={{ color: 'var(--color-primary)' }}
         >
-          Se alla tips →
+          Se allas tips idag →
         </Link>
       </div>
     </div>
@@ -76,7 +111,7 @@ export default function ScoreboardPage() {
   const [infoVisible, setInfoVisible] = useState(false)
   const [matches, setMatches] = useState<Match[]>([])
   const [matchResults, setMatchResults] = useState<Record<number, MatchResult>>({})
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [dropdownCache, setDropdownCache] = useState<Record<string, Prediction[]>>({})
   const [loadingDropdown, setLoadingDropdown] = useState<string | null>(null)
   const supabase = createClient()
@@ -150,11 +185,15 @@ export default function ScoreboardPage() {
   }
 
   async function toggleDropdown(participantId: string) {
-    if (expandedId === participantId) {
-      setExpandedId(null)
-      return
-    }
-    setExpandedId(participantId)
+    setExpandedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(participantId)) {
+        next.delete(participantId)
+      } else {
+        next.add(participantId)
+      }
+      return next
+    })
     if (!dropdownCache[participantId]) {
       setLoadingDropdown(participantId)
       const { data } = await supabase.from('predictions').select('*').eq('participant_id', participantId)
@@ -163,7 +202,8 @@ export default function ScoreboardPage() {
     }
   }
 
-  const upcomingMatches = matches.filter(m => !matchResults[m.id]).slice(0, 4)
+  const todayUTC = new Date().toISOString().slice(0, 10)
+  const todaysMatches = matches.filter(m => m.match_date.slice(0, 10) === todayUTC)
   const medal = (i: number) => i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`
 
   return (
@@ -213,7 +253,7 @@ export default function ScoreboardPage() {
                       <span className="flex items-center gap-1">
                         {s.participant_name}
                         <span className="text-gray-400 text-xs ml-1">
-                          {expandedId === s.participant_id ? '▲' : '▼'}
+                          {expandedIds.has(s.participant_id) ? '▲' : '▼'}
                         </span>
                       </span>
                     </td>
@@ -224,18 +264,19 @@ export default function ScoreboardPage() {
                       {s.total_points}
                     </td>
                   </tr>
-                  {expandedId === s.participant_id && (
-                    <tr>
-                      <td colSpan={6} className="p-0">
-                        <UpcomingTips
-                          participantId={s.participant_id}
-                          upcomingMatches={upcomingMatches}
-                          predictions={dropdownCache[s.participant_id] ?? []}
-                          isLoading={loadingDropdown === s.participant_id}
-                        />
-                      </td>
-                    </tr>
-                  )}
+                  {expandedIds.has(s.participant_id) && (
+                     <tr>
+                       <td colSpan={6} className="p-0">
+                         <TodaysTips
+                           participantId={s.participant_id}
+                           todaysMatches={todaysMatches}
+                           matchResults={matchResults}
+                           predictions={dropdownCache[s.participant_id] ?? []}
+                           isLoading={loadingDropdown === s.participant_id}
+                         />
+                       </td>
+                     </tr>
+                   )}
                 </Fragment>
               ))}
             </tbody>
@@ -253,17 +294,18 @@ export default function ScoreboardPage() {
                     <span className="text-xl w-8">{medal(i)}</span>
                     <span className="font-medium">{s.participant_name}</span>
                     <span className="text-gray-400 text-xs">
-                      {expandedId === s.participant_id ? '▲' : '▼'}
+                      {expandedIds.has(s.participant_id) ? '▲' : '▼'}
                     </span>
                   </div>
                   <span className="font-bold text-xl" style={{ color: 'var(--color-primary)' }}>
                     {s.total_points} p
                   </span>
                 </div>
-                {expandedId === s.participant_id && (
-                  <UpcomingTips
+                {expandedIds.has(s.participant_id) && (
+                  <TodaysTips
                     participantId={s.participant_id}
-                    upcomingMatches={upcomingMatches}
+                    todaysMatches={todaysMatches}
+                    matchResults={matchResults}
                     predictions={dropdownCache[s.participant_id] ?? []}
                     isLoading={loadingDropdown === s.participant_id}
                   />
