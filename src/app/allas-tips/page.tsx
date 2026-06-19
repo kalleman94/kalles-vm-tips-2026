@@ -173,24 +173,22 @@ function AllasTipsPageInner() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--color-primary)' }}>
-          Inlämnade tips
-        </h1>
-        <button
-          onClick={downloadAllTips}
-          disabled={downloading || matches.length === 0}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors disabled:opacity-50 shadow"
-          style={{ backgroundColor: 'var(--color-accent)' }}
-        >
-          {downloading ? '⏳ Laddar ner...' : '⬇️ Ladda ner allas tips'}
-        </button>
-      </div>
+      <h1 className="text-2xl font-bold mb-6" style={{ color: 'var(--color-primary)' }}>
+        Inlämnade tips
+      </h1>
 
       {loading ? (
         <p className="text-gray-400">Laddar...</p>
       ) : (
         <div className="flex gap-6 flex-col md:flex-row">
+          {/* Mobile: hint above participant list */}
+          {!selected && (
+            <div className="md:hidden text-center py-3 text-gray-400 text-sm">
+              <p className="text-2xl mb-1">👆</p>
+              <p>Välj en deltagare för att se deras tips</p>
+            </div>
+          )}
+
           {/* Participant list */}
           <div className="md:w-48 shrink-0">
             <div className="bg-white rounded-xl shadow overflow-hidden">
@@ -243,7 +241,7 @@ function AllasTipsPageInner() {
           {/* Tips view */}
           <div className="flex-1">
             {!selected && (
-              <div className="text-gray-400 text-center py-16">
+              <div className="hidden md:flex text-gray-400 text-center py-16 flex-col items-center">
                 <p className="text-3xl mb-2">👆</p>
                 <p>Välj en deltagare för att se deras tips</p>
               </div>
@@ -367,6 +365,18 @@ function AllasTipsPageInner() {
           </div>
         </div>
       )}
+
+      {/* Download button at bottom */}
+      <div className="mt-8 flex justify-center">
+        <button
+          onClick={downloadAllTips}
+          disabled={downloading || matches.length === 0}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium transition-colors disabled:opacity-50 shadow"
+          style={{ backgroundColor: 'var(--color-accent)' }}
+        >
+          {downloading ? '⏳ Laddar ner...' : '⬇️ Ladda ner allas tips'}
+        </button>
+      </div>
     </div>
   )
 }
