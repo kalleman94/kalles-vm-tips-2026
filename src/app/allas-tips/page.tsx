@@ -184,7 +184,7 @@ function AllasTipsPageInner() {
           {/* Mobile: hint above participant list */}
           {!selected && (
             <div className="md:hidden text-center py-3 text-gray-400 text-sm">
-              <p className="text-2xl mb-1">👆</p>
+              <p className="text-2xl mb-1">👇</p>
               <p>Välj en deltagare för att se deras tips</p>
             </div>
           )}
