@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import { ParticipantScore, Match, Prediction, MatchResult, Participant } from '@/lib/types'
 import { DEFAULT_INFO } from '@/lib/defaults'
 import { calculateMatchPoints, calculateKnockoutPoints } from '@/lib/scoring'
+import { getMatchDayDate } from '@/lib/matchday'
 
 function getMatchPoints(pred: Prediction | undefined, match: Match, result: MatchResult | undefined): number {
   if (!result || !pred) return 0
@@ -204,7 +205,7 @@ export default function ScoreboardPage() {
   }
 
   async function fetchMatchData() {
-    const todayUTC = new Date().toISOString().slice(0, 10)
+    const todayMatchDay = getMatchDayDate(new Date())
     const [{ data: matchData }, { data: resultData }] = await Promise.all([
       supabase.from('matches').select('*').order('match_date'),
       supabase.from('match_results').select('*'),
@@ -217,7 +218,7 @@ export default function ScoreboardPage() {
 
       // Fetch all participants' predictions for today's matches
       const todayMatchIds = (matchData ?? [])
-        .filter((m: Match) => m.match_date.slice(0, 10) === todayUTC)
+        .filter((m: Match) => getMatchDayDate(new Date(m.match_date)) === todayMatchDay)
         .map((m: Match) => m.id)
       if (todayMatchIds.length > 0) {
         const { data: predData } = await supabase
@@ -278,8 +279,8 @@ export default function ScoreboardPage() {
     }
   }
 
-  const todayUTC = new Date().toISOString().slice(0, 10)
-  const todaysMatches = matches.filter(m => m.match_date.slice(0, 10) === todayUTC)
+  const todayMatchDay = getMatchDayDate(new Date())
+  const todaysMatches = matches.filter(m => getMatchDayDate(new Date(m.match_date)) === todayMatchDay)
   const medal = (i: number) => i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`
 
   return (

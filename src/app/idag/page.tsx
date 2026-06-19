@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { Match, MatchResult, Participant, Prediction } from '@/lib/types'
 import { calculateMatchPoints, calculateKnockoutPoints } from '@/lib/scoring'
+import { getMatchDayDate } from '@/lib/matchday'
 
 const PHASE_LABELS: Record<string, string> = {
   group: 'Grupp',
@@ -54,7 +55,7 @@ export default function IdagPage() {
 
   useEffect(() => {
     async function load() {
-      const todayUTC = new Date().toISOString().slice(0, 10)
+      const todayMatchDay = getMatchDayDate(new Date())
 
       const [
         { data: matchData },
@@ -67,7 +68,7 @@ export default function IdagPage() {
       ])
 
       const todaysMatches: Match[] = (matchData ?? []).filter(
-        (m: Match) => m.match_date.slice(0, 10) === todayUTC
+        (m: Match) => getMatchDayDate(new Date(m.match_date)) === todayMatchDay
       )
 
       const resultMap: Record<number, MatchResult> = {}
