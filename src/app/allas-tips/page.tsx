@@ -111,34 +111,50 @@ function AllasTipsPageInner() {
       rows.push([])
 
       // Group stage header
-      rows.push(['Grupp', 'Hemmalag', 'Tips', 'Bortalag'])
+      rows.push(['Grupp', 'Hemmalag', 'Tips', 'Bortalag', 'Facit', 'Poäng'])
+      let totalPoints = 0
       groupMatches.forEach(m => {
         const pred = preds[m.id]
         const tips = (pred && pred.home_goals != null && pred.away_goals != null)
           ? `${pred.home_goals} – ${pred.away_goals}`
           : '–'
-        rows.push([`Grupp ${m.group_name ?? ''}`, m.home_team, tips, m.away_team])
+        const result = results[m.id]
+        const facit = result ? `${result.home_goals} – ${result.away_goals}` : '–'
+        const pointInfo = getMatchPointInfo(pred, result, m)
+        const poang = pointInfo !== null ? pointInfo.points : ''
+        if (typeof poang === 'number') totalPoints += poang
+        rows.push([`Grupp ${m.group_name ?? ''}`, m.home_team, tips, m.away_team, facit, poang])
       })
 
       rows.push([])
 
       // Knockout stage header
       if (koMatches.length > 0) {
-        rows.push(['Omgång', 'Hemmalag', 'Tips', 'Bortalag', 'Vinnartips'])
+        rows.push(['Omgång', 'Hemmalag', 'Tips', 'Bortalag', 'Vinnartips', 'Facit', 'Poäng'])
         koMatches.forEach(m => {
           const pred = preds[m.id]
           const tips = (pred && pred.home_goals != null && pred.away_goals != null)
             ? `${pred.home_goals} – ${pred.away_goals}`
             : '–'
+          const result = results[m.id]
+          const facit = result ? `${result.home_goals} – ${result.away_goals}` : '–'
+          const pointInfo = getMatchPointInfo(pred, result, m)
+          const poang = pointInfo !== null ? pointInfo.points : ''
+          if (typeof poang === 'number') totalPoints += poang
           rows.push([
             phaseLabel[m.phase] ?? m.phase,
             m.home_team,
             tips,
             m.away_team,
             pred?.predicted_winner || '–',
+            facit,
+            poang,
           ])
         })
       }
+
+      rows.push([])
+      rows.push(['', '', '', '', '', 'Totalt:', totalPoints])
 
       const ws = XLSX.utils.aoa_to_sheet(rows)
       ws['!cols'] = [
@@ -146,7 +162,9 @@ function AllasTipsPageInner() {
         { wch: 22 }, // Hemmalag
         { wch: 8 },  // Tips
         { wch: 22 }, // Bortalag
-        { wch: 22 }, // Vinnartips
+        { wch: 22 }, // Vinnartips/Facit
+        { wch: 8 },  // Facit/Poäng
+        { wch: 7 },  // Poäng
       ]
 
       const sheetName = participant.name.replace(/[/\\?*[\]:]/g, '').substring(0, 31)
