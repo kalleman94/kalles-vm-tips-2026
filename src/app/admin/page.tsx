@@ -226,6 +226,13 @@ export default function AdminPage() {
     const r = results[matchId]
     const t = teamEdits[matchId]
     const hasResult = r && r.home !== '' && r.away !== ''
+
+    // Block saving if draw without a winner selected
+    if (hasResult && r.home === r.away && !r.winner) {
+      alert('⚠️ Oavgjort resultat – du måste välja vem som gick vidare (klicka på "Vidare"-knappen) innan du sparar.')
+      return
+    }
+
     setSaving(matchId)
 
     // Always save team names if changed
