@@ -177,6 +177,83 @@ function TodayHighlights({
   )
 }
 
+function MatchOverview({
+  matches,
+  matchResults,
+}: {
+  matches: Match[]
+  matchResults: Record<number, MatchResult>
+}) {
+  const played = matches
+    .filter(m => matchResults[m.id])
+    .sort((a, b) => new Date(b.match_date).getTime() - new Date(a.match_date).getTime())
+    .slice(0, 6)
+
+  const upcoming = matches
+    .filter(m => !matchResults[m.id])
+    .sort((a, b) => new Date(a.match_date).getTime() - new Date(b.match_date).getTime())
+    .slice(0, 5)
+
+  if (played.length === 0 && upcoming.length === 0) return null
+
+  const fmtDate = (d: string) => new Date(d).toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm', month: 'short', day: 'numeric' })
+  const fmtTime = (d: string) => new Date(d).toLocaleTimeString('sv-SE', { timeZone: 'Europe/Stockholm', hour: '2-digit', minute: '2-digit' })
+
+  return (
+    <div className="bg-white rounded-xl shadow p-4 mb-6">
+      <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wide mb-3">📅 Matcher</h2>
+
+      {played.length > 0 && (
+        <div className="mb-3">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Senaste resultat</p>
+          <div className="space-y-1.5">
+            {played.map(m => {
+              const r = matchResults[m.id]
+              const isDraw = r.home_goals === r.away_goals
+              return (
+                <div key={m.id} className="flex items-center gap-2 text-sm min-w-0">
+                  <span className="text-xs text-gray-400 shrink-0">
+                    <span className="hidden sm:inline">{fmtDate(m.match_date)} </span>
+                    {fmtTime(m.match_date)}
+                  </span>
+                  <span className="flex-1 text-gray-700 truncate min-w-0">
+                    {m.home_team} – {m.away_team}
+                  </span>
+                  <span className="font-bold shrink-0" style={{ color: 'var(--color-primary)' }}>
+                    {r.home_goals}–{r.away_goals}
+                    {isDraw && r.winner && <span className="font-normal text-xs text-gray-500 ml-1">({r.winner})</span>}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {played.length > 0 && upcoming.length > 0 && <div className="border-t border-gray-100 my-2" />}
+
+      {upcoming.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Kommande matcher</p>
+          <div className="space-y-1.5">
+            {upcoming.map(m => (
+              <div key={m.id} className="flex items-center gap-2 text-sm min-w-0">
+                <span className="text-xs text-gray-400 shrink-0">
+                  <span className="hidden sm:inline">{fmtDate(m.match_date)} </span>
+                  {fmtTime(m.match_date)}
+                </span>
+                <span className="flex-1 text-gray-600 truncate min-w-0">
+                  {m.home_team} – {m.away_team}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function ScoreboardPage() {
   const [scores, setScores] = useState<ParticipantScore[]>([])
   const [participants, setParticipants] = useState<Participant[]>([])
@@ -324,6 +401,8 @@ export default function ScoreboardPage() {
         allPredictions={allPredictions}
         participants={participants}
       />
+
+      <MatchOverview matches={matches} matchResults={matchResults} />
       {loading ? (
         <div className="text-center py-16 text-gray-400">Laddar...</div>
       ) : scores.length === 0 ? (
