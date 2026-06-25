@@ -186,8 +186,8 @@ function MatchOverview({
 }) {
   const played = matches
     .filter(m => matchResults[m.id])
-    .sort((a, b) => new Date(b.match_date).getTime() - new Date(a.match_date).getTime())
-    .slice(0, 6)
+    .sort((a, b) => new Date(a.match_date).getTime() - new Date(b.match_date).getTime())
+    .slice(-6)
 
   const upcoming = matches
     .filter(m => !matchResults[m.id])
