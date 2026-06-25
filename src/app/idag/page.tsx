@@ -52,6 +52,8 @@ export default function IdagPage() {
   const [participants, setParticipants] = useState<Participant[]>([])
   const [allPreds, setAllPreds] = useState<Record<string, Record<number, Prediction>>>({})
   const [loading, setLoading] = useState(true)
+  const [groupTipsVisible, setGroupTipsVisible] = useState(true)
+  const [knockoutTipsVisible, setKnockoutTipsVisible] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -61,11 +63,20 @@ export default function IdagPage() {
         { data: matchData },
         { data: resultData },
         { data: participantData },
+        { data: settingsData },
       ] = await Promise.all([
         supabase.from('matches').select('*').order('match_date'),
         supabase.from('match_results').select('*'),
         supabase.from('participants').select('id, name').order('name'),
+        supabase.from('settings').select('key, value').in('key', ['group_tips_visible', 'knockout_tips_visible']),
       ])
+
+      if (settingsData) {
+        const map: Record<string, string> = {}
+        settingsData.forEach((s: any) => { map[s.key] = s.value })
+        if (map['group_tips_visible'] !== undefined) setGroupTipsVisible(map['group_tips_visible'] !== 'false')
+        if (map['knockout_tips_visible'] !== undefined) setKnockoutTipsVisible(map['knockout_tips_visible'] === 'true')
+      }
 
       const todaysMatches: Match[] = (matchData ?? []).filter(
         (m: Match) => getMatchDayDate(new Date(m.match_date)) === todayMatchDay
@@ -110,6 +121,12 @@ export default function IdagPage() {
 
   const todayHasResults = matches.some(m => results[m.id])
 
+  // Filter visible matches based on admin settings
+  const visibleMatches = matches.filter(m =>
+    m.phase === 'group' ? groupTipsVisible : knockoutTipsVisible
+  )
+  const allMatchesHidden = matches.length > 0 && visibleMatches.length === 0
+
   return (
     <div>
       <div className="mb-6">
@@ -127,6 +144,11 @@ export default function IdagPage() {
         <div className="text-center py-16 text-gray-400">
           <p className="text-4xl mb-3">📅</p>
           <p>Inga matcher spelas idag.</p>
+        </div>
+      ) : allMatchesHidden ? (
+        <div className="text-center py-16 text-gray-400">
+          <p className="text-4xl mb-3">🔒</p>
+          <p>Tipsen för dagens matcher är dolda tills alla har lämnat in.</p>
         </div>
       ) : (
         <div className="space-y-6">
@@ -162,7 +184,7 @@ export default function IdagPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {matches.map((m, i) => {
+                  {visibleMatches.map((m, i) => {
                     const result = results[m.id]
                     return (
                       <tr key={m.id} className={`border-t ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
@@ -216,7 +238,7 @@ export default function IdagPage() {
 
             {/* Mobile: one card per match */}
             <div className="md:hidden divide-y">
-              {matches.map(m => {
+              {visibleMatches.map(m => {
                 const result = results[m.id]
                 return (
                   <div key={m.id} className="p-4">

@@ -18,14 +18,22 @@ function TodaysTips({
   matchResults,
   predictions,
   isLoading,
+  groupTipsVisible,
+  knockoutTipsVisible,
 }: {
   todaysMatches: Match[]
   matchResults: Record<number, MatchResult>
   predictions: Prediction[]
   isLoading: boolean
+  groupTipsVisible: boolean
+  knockoutTipsVisible: boolean
 }) {
   const predMap: Record<number, Prediction> = {}
   predictions.forEach(p => { predMap[p.match_id] = p })
+
+  const visibleMatches = todaysMatches.filter(m =>
+    m.phase === 'group' ? groupTipsVisible : knockoutTipsVisible
+  )
 
   return (
     <div className="px-4 py-3 bg-blue-50 border-t">
@@ -33,10 +41,12 @@ function TodaysTips({
         <p className="text-sm text-gray-400 py-1">Laddar tips...</p>
       ) : todaysMatches.length === 0 ? (
         <p className="text-sm text-gray-500 py-1">Inga matcher idag.</p>
+      ) : visibleMatches.length === 0 ? (
+        <p className="text-sm text-gray-500 py-1">🔒 Tipsen för dagens matcher är dolda.</p>
       ) : (
         <div className="space-y-2">
           <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Dagens matcher</p>
-          {todaysMatches.map(m => {
+          {visibleMatches.map(m => {
             const pred = predMap[m.id]
             const result = matchResults[m.id]
             const hasTip = pred && pred.home_goals != null && pred.away_goals != null
@@ -166,6 +176,8 @@ export default function ScoreboardPage() {
   const [loading, setLoading] = useState(true)
   const [infoContent, setInfoContent] = useState('')
   const [infoVisible, setInfoVisible] = useState(false)
+  const [groupTipsVisible, setGroupTipsVisible] = useState(true)
+  const [knockoutTipsVisible, setKnockoutTipsVisible] = useState(false)
   const [matches, setMatches] = useState<Match[]>([])
   const [matchResults, setMatchResults] = useState<Record<number, MatchResult>>({})
   const [allPredictions, setAllPredictions] = useState<Record<string, Record<number, Prediction>>>({})
@@ -197,11 +209,13 @@ export default function ScoreboardPage() {
   }, [])
 
   async function fetchInfo() {
-    const { data } = await supabase.from('settings').select('key, value').in('key', ['info_box_content', 'info_box_visible'])
+    const { data } = await supabase.from('settings').select('key, value').in('key', ['info_box_content', 'info_box_visible', 'group_tips_visible', 'knockout_tips_visible'])
     const map: Record<string, string> = {}
     data?.forEach((s: any) => { map[s.key] = s.value })
     setInfoContent(map['info_box_content'] ?? DEFAULT_INFO)
     setInfoVisible(map['info_box_visible'] === 'true')
+    if (map['group_tips_visible'] !== undefined) setGroupTipsVisible(map['group_tips_visible'] !== 'false')
+    if (map['knockout_tips_visible'] !== undefined) setKnockoutTipsVisible(map['knockout_tips_visible'] === 'true')
   }
 
   async function fetchMatchData() {
@@ -355,6 +369,8 @@ export default function ScoreboardPage() {
                            matchResults={matchResults}
                            predictions={dropdownCache[s.participant_id] ?? []}
                            isLoading={loadingDropdown === s.participant_id}
+                           groupTipsVisible={groupTipsVisible}
+                           knockoutTipsVisible={knockoutTipsVisible}
                          />
                        </td>
                      </tr>
@@ -389,6 +405,8 @@ export default function ScoreboardPage() {
                     matchResults={matchResults}
                     predictions={dropdownCache[s.participant_id] ?? []}
                     isLoading={loadingDropdown === s.participant_id}
+                    groupTipsVisible={groupTipsVisible}
+                    knockoutTipsVisible={knockoutTipsVisible}
                   />
                 )}
               </div>

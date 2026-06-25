@@ -33,6 +33,8 @@ export default function AdminPage() {
   const [bonusLocked, setBonusLocked] = useState(false)
   const [knockoutLocked, setKnockoutLocked] = useState(false)
   const [savingLock, setSavingLock] = useState<string | null>(null)
+  const [groupTipsVisible, setGroupTipsVisible] = useState(true)
+  const [knockoutTipsVisible, setKnockoutTipsVisible] = useState(false)
   const [bonus, setBonus] = useState({ champion: '', top_scorer: '', third_place: '' })
   const [savingBonus, setSavingBonus] = useState(false)
   const [bonusMsg, setBonusMsg] = useState('')
@@ -93,6 +95,8 @@ export default function AdminPage() {
     setGroupLocked(map['group_locked'] === 'true')
     setBonusLocked(map['bonus_locked'] === 'true')
     setKnockoutLocked(map['knockout_locked'] === 'true')
+    setGroupTipsVisible(map['group_tips_visible'] !== 'false')
+    setKnockoutTipsVisible(map['knockout_tips_visible'] === 'true')
     setBonus({
       champion: map['actual_champion'] ?? '',
       top_scorer: map['actual_top_scorer'] ?? '',
@@ -550,6 +554,48 @@ export default function AdminPage() {
           >
             <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
               knockoutEnabled ? 'translate-x-6' : 'translate-x-1'
+            }`} />
+          </button>
+        </div>
+        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg mb-2">
+          <div>
+            <p className="font-medium text-sm">👁 Visa gruppspelstips för alla</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {groupTipsVisible
+                ? '✅ Synligt – deltagare ser varandras gruppspelstips'
+                : '🙈 Dolt – deltagare ser inte varandras gruppspelstips'}
+            </p>
+          </div>
+          <button
+            onClick={() => toggleSetting('group_tips_visible', groupTipsVisible, setGroupTipsVisible)}
+            disabled={savingLock === 'group_tips_visible'}
+            className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors disabled:opacity-50 ${
+              groupTipsVisible ? 'bg-green-500' : 'bg-gray-300'
+            }`}
+          >
+            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+              groupTipsVisible ? 'translate-x-6' : 'translate-x-1'
+            }`} />
+          </button>
+        </div>
+        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg mb-2">
+          <div>
+            <p className="font-medium text-sm">👁 Visa slutspelstips för alla</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {knockoutTipsVisible
+                ? '✅ Synligt – deltagare ser varandras slutspelstips'
+                : '🙈 Dolt – deltagare ser inte varandras slutspelstips'}
+            </p>
+          </div>
+          <button
+            onClick={() => toggleSetting('knockout_tips_visible', knockoutTipsVisible, setKnockoutTipsVisible)}
+            disabled={savingLock === 'knockout_tips_visible'}
+            className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors disabled:opacity-50 ${
+              knockoutTipsVisible ? 'bg-green-500' : 'bg-gray-300'
+            }`}
+          >
+            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+              knockoutTipsVisible ? 'translate-x-6' : 'translate-x-1'
             }`} />
           </button>
         </div>

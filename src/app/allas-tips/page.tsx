@@ -18,6 +18,8 @@ function AllasTipsPageInner() {
   const [loading, setLoading] = useState(true)
   const [loadingTips, setLoadingTips] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [groupTipsVisible, setGroupTipsVisible] = useState(true)
+  const [knockoutTipsVisible, setKnockoutTipsVisible] = useState(false)
 
   useEffect(() => {
     supabase.from('participants').select('*').order('name').then(({ data }: { data: any }) => {
@@ -32,6 +34,14 @@ function AllasTipsPageInner() {
         const map: Record<number, MatchResult> = {}
         data.forEach((r: MatchResult) => { map[r.match_id] = r })
         setResults(map)
+      }
+    })
+    supabase.from('settings').select('key, value').in('key', ['group_tips_visible', 'knockout_tips_visible']).then(({ data }: { data: any }) => {
+      if (data) {
+        const map: Record<string, string> = {}
+        data.forEach((s: any) => { map[s.key] = s.value })
+        if (map['group_tips_visible'] !== undefined) setGroupTipsVisible(map['group_tips_visible'] !== 'false')
+        if (map['knockout_tips_visible'] !== undefined) setKnockoutTipsVisible(map['knockout_tips_visible'] === 'true')
       }
     })
   }, [])
@@ -282,7 +292,11 @@ function AllasTipsPageInner() {
                 )}
 
                 {/* Group matches */}
-                {groups.map(g => (
+                {!groupTipsVisible ? (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-center text-sm text-yellow-800">
+                    🔒 Gruppspelstipsen är dolda tills alla har lämnat in.
+                  </div>
+                ) : groups.map(g => (
                   <div key={g} className="bg-white rounded-xl shadow overflow-hidden">
                     <div className="px-4 py-2 text-xs font-bold text-white" style={{ backgroundColor: 'var(--color-primary)' }}>
                       Grupp {g}
@@ -331,6 +345,11 @@ function AllasTipsPageInner() {
 
                 {/* Knockout */}
                 {knockoutMatches.length > 0 && (
+                  !knockoutTipsVisible ? (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-center text-sm text-yellow-800">
+                      🔒 Slutspelstipsen är dolda tills alla har lämnat in.
+                    </div>
+                  ) : (
                   <div className="bg-white rounded-xl shadow overflow-hidden">
                     <div className="px-4 py-2 text-xs font-bold text-white" style={{ backgroundColor: 'var(--color-accent)' }}>
                       Slutspel
@@ -377,6 +396,7 @@ function AllasTipsPageInner() {
                       })}
                     </div>
                   </div>
+                  )
                 )}
               </div>
             )}
