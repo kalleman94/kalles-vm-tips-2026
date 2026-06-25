@@ -578,14 +578,14 @@ function getMatchPointInfo(
   result: MatchResult | undefined,
   match: Match,
   teamsMatch = true
-): { points: number; exact: boolean } | null {
+): { points: number; exact: boolean; gateFail?: boolean } | null {
   if (!result) return null
   if (!pred || pred.home_goals === null || pred.home_goals === undefined ||
       pred.away_goals === null || pred.away_goals === undefined) return { points: 0, exact: false }
 
   if (match.phase !== 'group') {
     const realTeamsFilled = !isPlaceholder(match.home_team) && !isPlaceholder(match.away_team)
-    if (realTeamsFilled && !teamsMatch) return { points: 0, exact: false }
+    if (realTeamsFilled && !teamsMatch) return { points: 0, exact: false, gateFail: true }
   }
 
   const sign = (h: number, a: number) => h > a ? '1' : h === a ? 'X' : '2'
@@ -607,8 +607,9 @@ function getMatchPointInfo(
   return { points, exact: homeCorrect && awayCorrect }
 }
 
-function PointsBadge({ info }: { info: { points: number; exact: boolean } | null }) {
+function PointsBadge({ info }: { info: { points: number; exact: boolean; gateFail?: boolean } | null }) {
   if (!info) return null
+  if (info.gateFail) return <span className="text-xs font-bold text-red-500 shrink-0">❌ 0p (fel lag)</span>
   if (info.points === 0) return <span className="text-xs font-bold text-red-500 shrink-0">✗ 0p</span>
   if (info.exact) return <span className="text-xs font-bold text-green-600 shrink-0">✓ {info.points}p</span>
   return <span className="text-xs font-bold text-orange-500 shrink-0">~ {info.points}p</span>

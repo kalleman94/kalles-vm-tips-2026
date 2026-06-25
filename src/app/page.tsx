@@ -7,6 +7,7 @@ import { ParticipantScore, Match, Prediction, MatchResult, Participant } from '@
 import { DEFAULT_INFO } from '@/lib/defaults'
 import { calculateMatchPoints, calculateKnockoutPoints } from '@/lib/scoring'
 import { getMatchDayDate } from '@/lib/matchday'
+import { clientGatePass } from '@/lib/gate'
 
 function getMatchPoints(pred: Prediction | undefined, match: Match, result: MatchResult | undefined): number {
   if (!result || !pred) return 0
@@ -15,6 +16,7 @@ function getMatchPoints(pred: Prediction | undefined, match: Match, result: Matc
 
 function TodaysTips({
   todaysMatches,
+  allMatches,
   matchResults,
   predictions,
   isLoading,
@@ -22,6 +24,7 @@ function TodaysTips({
   knockoutTipsVisible,
 }: {
   todaysMatches: Match[]
+  allMatches: Match[]
   matchResults: Record<number, MatchResult>
   predictions: Prediction[]
   isLoading: boolean
@@ -30,6 +33,9 @@ function TodaysTips({
 }) {
   const predMap: Record<number, Prediction> = {}
   predictions.forEach(p => { predMap[p.match_id] = p })
+
+  const matchesByNum = new Map<number, Match>()
+  allMatches.forEach(m => matchesByNum.set(m.match_number, m))
 
   const visibleMatches = todaysMatches.filter(m =>
     m.phase === 'group' ? groupTipsVisible : knockoutTipsVisible
@@ -51,7 +57,8 @@ function TodaysTips({
             const result = matchResults[m.id]
             const hasTip = pred && pred.home_goals != null && pred.away_goals != null
             const tipScore = hasTip ? `${pred.home_goals}–${pred.away_goals}` : '?–?'
-            const pts = getMatchPoints(pred, m, result)
+            const gateOk = clientGatePass(m, predictions, matchesByNum)
+            const pts = gateOk ? getMatchPoints(pred, m, result) : 0
 
             return (
               <div key={m.id} className="text-sm">
@@ -76,8 +83,8 @@ function TodaysTips({
                       </span>
                     )}
                     {result && (
-                      <span className="text-xs font-bold" style={{ color: pts >= 7 ? '#16a34a' : pts >= 5 ? 'var(--color-primary)' : pts > 0 ? '#f59e0b' : '#dc2626' }}>
-                        {pts}p
+                      <span className="text-xs font-bold" style={{ color: !gateOk ? '#dc2626' : pts >= 7 ? '#16a34a' : pts >= 5 ? 'var(--color-primary)' : pts > 0 ? '#f59e0b' : '#dc2626' }}>
+                        {!gateOk ? '❌ 0p (fel lag)' : `${pts}p`}
                       </span>
                     )}
                   </div>
@@ -135,13 +142,13 @@ function TodayHighlights({
       <div className="space-y-3">
         {matchesWithResults.map(m => {
           const result = matchResults[m.id]
-          const winners7: string[] = []
-          const winners5: string[] = []
+          const winners7: Array<{ name: string; pts: number }> = []
+          const winners5: Array<{ name: string; pts: number }> = []
           participants.forEach(p => {
             const pred = allPredictions[p.id]?.[m.id]
             const pts = getMatchPoints(pred, m, result)
-            if (pts >= 7) winners7.push(p.name)
-            else if (pts >= 5) winners5.push(p.name)
+            if (pts >= 7) winners7.push({ name: p.name, pts })
+            else if (pts >= 5) winners5.push({ name: p.name, pts })
           })
           if (winners7.length === 0 && winners5.length === 0) return null
           return (
@@ -151,14 +158,14 @@ function TodayHighlights({
                 <span className="ml-2 text-gray-400">{result.home_goals}–{result.away_goals}</span>
               </p>
               <div className="flex flex-wrap gap-1.5">
-                {winners7.map(name => (
+                {winners7.map(({ name, pts }) => (
                   <span key={name} className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-800">
-                    7p {name}
+                    {pts}p {name}
                   </span>
                 ))}
-                {winners5.map(name => (
+                {winners5.map(({ name, pts }) => (
                   <span key={name} className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
-                    5p {name}
+                    {pts}p {name}
                   </span>
                 ))}
               </div>
@@ -366,6 +373,7 @@ export default function ScoreboardPage() {
                        <td colSpan={6} className="p-0">
                          <TodaysTips
                            todaysMatches={todaysMatches}
+                           allMatches={matches}
                            matchResults={matchResults}
                            predictions={dropdownCache[s.participant_id] ?? []}
                            isLoading={loadingDropdown === s.participant_id}
@@ -402,6 +410,7 @@ export default function ScoreboardPage() {
                 {expandedIds.has(s.participant_id) && (
                   <TodaysTips
                     todaysMatches={todaysMatches}
+                    allMatches={matches}
                     matchResults={matchResults}
                     predictions={dropdownCache[s.participant_id] ?? []}
                     isLoading={loadingDropdown === s.participant_id}

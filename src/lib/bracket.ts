@@ -12,8 +12,8 @@ export const WINNER_BRACKET: Array<{ to: number; home: number; away: number }> =
   { to: 96, home: 85, away: 87 },
   // Kvartsfinaler (QF)
   { to: 97,  home: 89, away: 90 },
-  { to: 98,  home: 91, away: 92 },
-  { to: 99,  home: 93, away: 94 },
+  { to: 98,  home: 93, away: 94 },
+  { to: 99,  home: 91, away: 92 },
   { to: 100, home: 95, away: 96 },
   // Semifinaler (SF)
   { to: 101, home: 97,  away: 98  },

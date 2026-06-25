@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import * as XLSX from 'xlsx'
 import { createClient } from '@/lib/supabase'
 import { Participant, Match, Prediction, BonusAnswers, MatchResult, DEFAULT_POINTS } from '@/lib/types'
+import { clientGatePass } from '@/lib/gate'
 
 function AllasTipsPageInner() {
   const supabase = createClient()
@@ -198,6 +199,8 @@ function AllasTipsPageInner() {
   const groupMatches = matches.filter(m => m.phase === 'group')
   const knockoutMatches = matches.filter(m => m.phase !== 'group')
   const groups = [...new Set(groupMatches.map(m => m.group_name))].sort()
+  const matchesByNum = new Map<number, Match>()
+  matches.forEach(m => matchesByNum.set(m.match_number, m))
 
   return (
     <div>
@@ -357,6 +360,7 @@ function AllasTipsPageInner() {
                     <div className="divide-y">
                       {knockoutMatches.map(m => {
                         const p = predMap[m.id]
+                        const teamsMatch = clientGatePass(m, predictions, matchesByNum)
                         return (
                           <div key={m.id} className="px-4 py-2 text-sm">
                             <div className="flex items-start gap-3">
@@ -373,10 +377,10 @@ function AllasTipsPageInner() {
                                   </span>
                                   <div className="hidden sm:flex flex-1 items-center gap-2">
                                     <span>{m.away_team}</span>
-                                    <PointsBadge info={getMatchPointInfo(p, results[m.id], m)} />
+                                    <PointsBadge info={getMatchPointInfo(p, results[m.id], m, teamsMatch)} />
                                   </div>
                                   <div className="flex-1 flex justify-end sm:hidden">
-                                    <PointsBadge info={getMatchPointInfo(p, results[m.id], m)} />
+                                    <PointsBadge info={getMatchPointInfo(p, results[m.id], m, teamsMatch)} />
                                   </div>
                                 </div>
                                 {results[m.id] && (
@@ -430,11 +434,19 @@ export default function AllasTipsPage() {
 function getMatchPointInfo(
   pred: Prediction | undefined,
   result: MatchResult | undefined,
-  match: Match
-): { points: number; exact: boolean } | null {
+  match: Match,
+  teamsMatch = true
+): { points: number; exact: boolean; gateFail?: boolean } | null {
   if (!result) return null
   if (!pred || pred.home_goals === null || pred.home_goals === undefined ||
       pred.away_goals === null || pred.away_goals === undefined) return { points: 0, exact: false }
+
+  if (match.phase !== 'group') {
+    const realTeamsFilled = match.home_team && match.away_team &&
+      !/^(Vinnare|Tvåa|Bästa|Förlorare)/.test(match.home_team) &&
+      !/^(Vinnare|Tvåa|Bästa|Förlorare)/.test(match.away_team)
+    if (realTeamsFilled && !teamsMatch) return { points: 0, exact: false, gateFail: true }
+  }
   const sign = (h: number, a: number) => h > a ? '1' : h === a ? 'X' : '2'
   let points = 0
   const homeCorrect = pred.home_goals === result.home_goals
@@ -454,8 +466,9 @@ function getMatchPointInfo(
   return { points, exact: homeCorrect && awayCorrect }
 }
 
-function PointsBadge({ info }: { info: { points: number; exact: boolean } | null }) {
+function PointsBadge({ info }: { info: { points: number; exact: boolean; gateFail?: boolean } | null }) {
   if (!info) return null
+  if (info.gateFail) return <span className="text-xs font-bold text-red-500 shrink-0">❌ 0p (fel lag)</span>
   if (info.points === 0) return <span className="text-xs font-bold text-red-500 shrink-0">✗ 0p</span>
   if (info.exact) return <span className="text-xs font-bold text-green-600 shrink-0">✓ {info.points}p</span>
   return <span className="text-xs font-bold text-orange-500 shrink-0">~ {info.points}p</span>
