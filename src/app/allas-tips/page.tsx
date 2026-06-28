@@ -6,6 +6,7 @@ import * as XLSX from 'xlsx'
 import { createClient } from '@/lib/supabase'
 import { Participant, Match, Prediction, BonusAnswers, MatchResult, DEFAULT_POINTS } from '@/lib/types'
 import { clientGatePass } from '@/lib/gate'
+import { buildResolvedTeams } from '@/lib/bracket'
 
 function AllasTipsPageInner() {
   const supabase = createClient()
@@ -14,6 +15,7 @@ function AllasTipsPageInner() {
   const [selected, setSelected] = useState<string | null>(null)
   const [matches, setMatches] = useState<Match[]>([])
   const [predictions, setPredictions] = useState<Prediction[]>([])
+  const [resolvedTeams, setResolvedTeams] = useState<Record<number, { home: string; away: string }>>({})
   const [bonus, setBonus] = useState<BonusAnswers | null>(null)
   const [results, setResults] = useState<Record<number, MatchResult>>({})
   const [loading, setLoading] = useState(true)
@@ -62,8 +64,13 @@ function AllasTipsPageInner() {
       supabase.from('predictions').select('*').eq('participant_id', id),
       supabase.from('bonus_answers').select('*').eq('participant_id', id).maybeSingle(),
     ])
-    setPredictions(predData ?? [])
+    const preds: Prediction[] = predData ?? []
+    setPredictions(preds)
     setBonus(bonusData)
+    // Bygg upp lösta lagnamn från deltagarens egna R32-val
+    const predMap: Record<number, Prediction> = {}
+    preds.forEach(p => { predMap[p.match_id] = p })
+    setResolvedTeams(buildResolvedTeams(matches, predMap))
     setLoadingTips(false)
   }
 
@@ -112,6 +119,7 @@ function AllasTipsPageInner() {
     participants.forEach(participant => {
       const preds = predsByParticipant[participant.id] ?? {}
       const bonus = bonusByParticipant[participant.id]
+      const participantResolvedTeams = buildResolvedTeams(matches, preds)
       const rows: (string | number)[][] = []
 
       // Bonus questions
@@ -144,6 +152,8 @@ function AllasTipsPageInner() {
         rows.push(['Omgång', 'Hemmalag', 'Tips', 'Bortalag', 'Vinnartips', 'Facit', 'Poäng'])
         koMatches.forEach(m => {
           const pred = preds[m.id]
+          const homeTeam = participantResolvedTeams[m.id]?.home ?? m.home_team
+          const awayTeam = participantResolvedTeams[m.id]?.away ?? m.away_team
           const tips = (pred && pred.home_goals != null && pred.away_goals != null)
             ? `${pred.home_goals} – ${pred.away_goals}`
             : '–'
@@ -154,9 +164,9 @@ function AllasTipsPageInner() {
           if (typeof poang === 'number') totalPoints += poang
           rows.push([
             phaseLabel[m.phase] ?? m.phase,
-            m.home_team,
+            homeTeam,
             tips,
-            m.away_team,
+            awayTeam,
             pred?.predicted_winner || '–',
             facit,
             poang,
@@ -361,22 +371,24 @@ function AllasTipsPageInner() {
                       {knockoutMatches.map(m => {
                         const p = predMap[m.id]
                         const teamsMatch = clientGatePass(m, predictions, matchesByNum)
+                        const homeTeam = resolvedTeams[m.id]?.home ?? m.home_team
+                        const awayTeam = resolvedTeams[m.id]?.away ?? m.away_team
                         return (
                           <div key={m.id} className="px-4 py-2 text-sm">
                             <div className="flex items-start gap-3">
                               <span className="text-gray-400 w-20 shrink-0 text-xs capitalize pt-0.5">{m.phase}</span>
                               <div className="flex-1">
                                 <div className="flex gap-2 mb-1 sm:hidden">
-                                  <span className="flex-1 min-w-0 truncate">{m.home_team}</span>
-                                  <span className="flex-1 min-w-0 truncate text-right">{m.away_team}</span>
+                                  <span className="flex-1 min-w-0 truncate">{homeTeam}</span>
+                                  <span className="flex-1 min-w-0 truncate text-right">{awayTeam}</span>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                  <span className="hidden sm:block flex-1 text-right">{m.home_team}</span>
+                                  <span className="hidden sm:block flex-1 text-right">{homeTeam}</span>
                                   <span className="font-mono font-bold w-12 text-center">
                                     {p ? `${p.home_goals ?? '?'} – ${p.away_goals ?? '?'}` : '? – ?'}
                                   </span>
                                   <div className="hidden sm:flex flex-1 items-center gap-2">
-                                    <span>{m.away_team}</span>
+                                    <span>{awayTeam}</span>
                                     <PointsBadge info={getMatchPointInfo(p, results[m.id], m, teamsMatch)} />
                                   </div>
                                   <div className="flex-1 flex justify-end sm:hidden">

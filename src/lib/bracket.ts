@@ -32,3 +32,43 @@ export const PHASE_ORDER = ['r32', 'r16', 'qf', 'sf', 'bronze', 'final'] as cons
 export function isPlaceholderName(name: string): boolean {
   return /^(Vinnare|Tvåa|Bästa|Förlorare)/.test(name)
 }
+
+// Resolve R16+ match team names from a participant's own bracket picks.
+// predictions: map from match_id → { predicted_winner?, ... }
+export function buildResolvedTeams(
+  matches: { id: number; match_number: number; home_team: string; away_team: string }[],
+  predictions: Record<number, { predicted_winner?: string | null } | undefined>
+): Record<number, { home: string; away: string }> {
+  const resolved: Record<number, { home: string; away: string }> = {}
+  const byNum: Record<number, { id: number; match_number: number; home_team: string; away_team: string }> = {}
+  matches.forEach(m => {
+    resolved[m.id] = { home: m.home_team, away: m.away_team }
+    byNum[m.match_number] = m
+  })
+
+  for (const { to, home: homeNum, away: awayNum } of WINNER_BRACKET) {
+    const toMatch = byNum[to]
+    const homeSource = byNum[homeNum]
+    const awaySource = byNum[awayNum]
+    if (!toMatch || !homeSource || !awaySource) continue
+    const homeWinner = predictions[homeSource.id]?.predicted_winner
+    const awayWinner = predictions[awaySource.id]?.predicted_winner
+    if (homeWinner) resolved[toMatch.id].home = homeWinner
+    if (awayWinner) resolved[toMatch.id].away = awayWinner
+  }
+
+  // Bronze: förlorare av de två semifinalerna
+  const bronzeMatch = byNum[BRONZE_MATCH_NUM]
+  const sf1 = byNum[BRONZE_SF1_NUM]
+  const sf2 = byNum[BRONZE_SF2_NUM]
+  if (bronzeMatch && sf1 && sf2) {
+    const sf1r = resolved[sf1.id]
+    const sf2r = resolved[sf2.id]
+    const w1 = predictions[sf1.id]?.predicted_winner
+    const w2 = predictions[sf2.id]?.predicted_winner
+    if (w1) resolved[bronzeMatch.id].home = w1 === sf1r.home ? sf1r.away : sf1r.home
+    if (w2) resolved[bronzeMatch.id].away = w2 === sf2r.home ? sf2r.away : sf2r.home
+  }
+
+  return resolved
+}
