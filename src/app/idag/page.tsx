@@ -94,12 +94,19 @@ export default function IdagPage() {
       setParticipants(participantData ?? [])
 
       if ((participantData ?? []).length > 0) {
-        const { data: predData } = await supabase
-          .from('predictions')
-          .select('*')
-
+        // Fetch all predictions with pagination (Supabase max 1000 rows per query)
+        const batchSize = 1000
+        let allPredRows: Prediction[] = []
+        let from = 0
+        while (true) {
+          const { data: batch } = await supabase.from('predictions').select('*').range(from, from + batchSize - 1)
+          if (!batch || batch.length === 0) break
+          allPredRows = allPredRows.concat(batch)
+          if (batch.length < batchSize) break
+          from += batchSize
+        }
         const map: Record<string, Record<number, Prediction>> = {}
-        ;(predData ?? []).forEach((p: Prediction) => {
+        allPredRows.forEach((p: Prediction) => {
           if (!map[p.participant_id]) map[p.participant_id] = {}
           map[p.participant_id][p.match_id] = p
         })

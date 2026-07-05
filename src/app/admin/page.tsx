@@ -227,6 +227,19 @@ export default function AdminPage() {
     const t = teamEdits[matchId]
     const hasResult = r && r.home !== '' && r.away !== ''
 
+    // Both fields empty = clear the result
+    if (r && r.home === '' && r.away === '') {
+      setSaving(matchId)
+      const { error } = await supabase.from('match_results').delete().eq('match_id', matchId)
+      setSaving(null)
+      if (error) { alert('Kunde inte ta bort resultat: ' + error.message); return }
+      await fetch('/api/recalculate', { method: 'POST' })
+      await loadMatches()
+      setSavedIds(prev => [...prev, matchId])
+      setTimeout(() => setSavedIds(prev => prev.filter(id => id !== matchId)), 3000)
+      return
+    }
+
     // Block saving if draw without a winner selected
     if (hasResult && r.home === r.away && !r.winner) {
       alert('⚠️ Oavgjort resultat – du måste välja vem som gick vidare (klicka på "Vidare"-knappen) innan du sparar.')

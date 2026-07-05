@@ -357,12 +357,19 @@ export default function ScoreboardPage() {
       resultData.forEach((r: MatchResult) => { map[r.match_id] = r })
       setMatchResults(map)
 
-      // Fetch all participants' predictions (needed for gate checks across all rounds)
-      const { data: predData } = await supabase
-        .from('predictions')
-        .select('*')
+      // Fetch all participants' predictions with pagination (Supabase max 1000 rows per query)
+      const batchSize = 1000
+      let allPreds: Prediction[] = []
+      let from = 0
+      while (true) {
+        const { data: batch } = await supabase.from('predictions').select('*').range(from, from + batchSize - 1)
+        if (!batch || batch.length === 0) break
+        allPreds = allPreds.concat(batch)
+        if (batch.length < batchSize) break
+        from += batchSize
+      }
       const predMap: Record<string, Record<number, Prediction>> = {}
-      ;(predData ?? []).forEach((p: Prediction) => {
+      allPreds.forEach((p: Prediction) => {
         if (!predMap[p.participant_id]) predMap[p.participant_id] = {}
         predMap[p.participant_id][p.match_id] = p
       })
