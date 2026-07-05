@@ -8,6 +8,7 @@ import { DEFAULT_INFO } from '@/lib/defaults'
 import { calculateMatchPoints, calculateKnockoutPoints } from '@/lib/scoring'
 import { getMatchDayDate } from '@/lib/matchday'
 import { clientGatePass } from '@/lib/gate'
+import { buildResolvedTeams } from '@/lib/bracket'
 
 const KNOCKOUT_PHASE_LABELS: Record<string, string> = {
   r16: 'Åttondelsfinaler',
@@ -66,6 +67,8 @@ function KnockoutRoundTips({
   const predMap: Record<number, Prediction> = {}
   predictions.forEach(p => { predMap[p.match_id] = p })
 
+  const resolvedTeams = buildResolvedTeams(allMatches, predMap)
+
   return (
     <div className="px-4 py-3 bg-blue-50 border-t">
       {isLoading ? (
@@ -84,6 +87,9 @@ function KnockoutRoundTips({
             const tipScore = hasTip ? `${pred.home_goals}–${pred.away_goals}` : '?–?'
             const gateOk = clientGatePass(m, predictions, matchesByNum)
             const pts = gateOk ? getMatchPoints(pred, m, result) : 0
+            const resolved = resolvedTeams[m.id]
+            const displayHome = !gateOk && resolved ? resolved.home : m.home_team
+            const displayAway = !gateOk && resolved ? resolved.away : m.away_team
 
             return (
               <div key={m.id} className="text-sm">
@@ -94,15 +100,15 @@ function KnockoutRoundTips({
                         timeZone: 'Europe/Stockholm', month: 'short', day: 'numeric',
                       })}
                     </span>
-                    <span className="truncate">{m.home_team}</span>
+                    <span className="truncate">{displayHome}</span>
                     <span className="text-gray-400 shrink-0">–</span>
-                    <span className="truncate">{m.away_team}</span>
+                    <span className="truncate">{displayAway}</span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="font-mono font-bold" style={{ color: hasTip ? 'var(--color-primary)' : '#9ca3af' }}>
                       {tipScore}
                     </span>
-                    {result && (
+                    {result && gateOk && (
                       <span className="text-xs text-gray-500">
                         ({result.home_goals}–{result.away_goals})
                       </span>
@@ -114,7 +120,13 @@ function KnockoutRoundTips({
                     )}
                   </div>
                 </div>
-                {pred?.predicted_winner && (
+                {!gateOk && result && (
+                  <div className="ml-16 text-xs text-gray-400 mt-0.5">
+                    Faktiskt: <span className="font-medium">{m.home_team} – {m.away_team}</span>
+                    {' '}({result.home_goals}–{result.away_goals})
+                  </div>
+                )}
+                {gateOk && pred?.predicted_winner && (
                   <div className="ml-16 text-xs text-gray-500 mt-0.5">
                     Vinnare: <span className="font-medium" style={{ color: 'var(--color-primary)' }}>{pred.predicted_winner}</span>
                     {result?.winner && (
