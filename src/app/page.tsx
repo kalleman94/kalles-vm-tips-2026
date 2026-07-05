@@ -9,50 +9,75 @@ import { calculateMatchPoints, calculateKnockoutPoints } from '@/lib/scoring'
 import { getMatchDayDate } from '@/lib/matchday'
 import { clientGatePass } from '@/lib/gate'
 
+const KNOCKOUT_PHASE_LABELS: Record<string, string> = {
+  r16: 'Åttondelsfinaler',
+  qf: 'Kvartsfinaler',
+  sf: 'Semifinaler',
+  bronze: 'Bronsmatch',
+  final: 'Final',
+}
+const KNOCKOUT_PHASES = ['r16', 'qf', 'sf', 'bronze', 'final']
+
+function getCurrentKnockoutPhase(allMatches: Match[], matchResults: Record<number, MatchResult>): string {
+  let current = 'r16'
+  for (const phase of KNOCKOUT_PHASES) {
+    const pm = allMatches.filter(m => m.phase === phase)
+    if (pm.length === 0) continue
+    current = phase
+    if (!pm.every(m => matchResults[m.id])) break
+  }
+  return current
+}
+
 function getMatchPoints(pred: Prediction | undefined, match: Match, result: MatchResult | undefined): number {
   if (!result || !pred) return 0
   return calculateMatchPoints(pred, result) + calculateKnockoutPoints(match.phase, pred.predicted_winner ?? null, result.winner ?? null)
 }
 
-function TodaysTips({
-  todaysMatches,
+function KnockoutRoundTips({
   allMatches,
   matchResults,
   predictions,
   isLoading,
-  groupTipsVisible,
   knockoutTipsVisible,
 }: {
-  todaysMatches: Match[]
   allMatches: Match[]
   matchResults: Record<number, MatchResult>
   predictions: Prediction[]
   isLoading: boolean
-  groupTipsVisible: boolean
   knockoutTipsVisible: boolean
 }) {
-  const predMap: Record<number, Prediction> = {}
-  predictions.forEach(p => { predMap[p.match_id] = p })
+  if (!knockoutTipsVisible) {
+    return (
+      <div className="px-4 py-3 bg-blue-50 border-t">
+        <p className="text-sm text-gray-500 py-1">🔒 Tipsen för slutspelet är dolda.</p>
+      </div>
+    )
+  }
 
   const matchesByNum = new Map<number, Match>()
   allMatches.forEach(m => matchesByNum.set(m.match_number, m))
 
-  const visibleMatches = todaysMatches.filter(m =>
-    m.phase === 'group' ? groupTipsVisible : knockoutTipsVisible
-  )
+  const currentPhase = getCurrentKnockoutPhase(allMatches, matchResults)
+  const phaseMatches = allMatches
+    .filter(m => m.phase === currentPhase)
+    .sort((a, b) => new Date(a.match_date).getTime() - new Date(b.match_date).getTime())
+
+  const predMap: Record<number, Prediction> = {}
+  predictions.forEach(p => { predMap[p.match_id] = p })
 
   return (
     <div className="px-4 py-3 bg-blue-50 border-t">
       {isLoading ? (
         <p className="text-sm text-gray-400 py-1">Laddar tips...</p>
-      ) : todaysMatches.length === 0 ? (
-        <p className="text-sm text-gray-500 py-1">Inga matcher idag.</p>
-      ) : visibleMatches.length === 0 ? (
-        <p className="text-sm text-gray-500 py-1">🔒 Tipsen för dagens matcher är dolda.</p>
+      ) : phaseMatches.length === 0 ? (
+        <p className="text-sm text-gray-500 py-1">Inga slutspelsmatcher ännu.</p>
       ) : (
         <div className="space-y-2">
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Dagens matcher</p>
-          {visibleMatches.map(m => {
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">
+            {KNOCKOUT_PHASE_LABELS[currentPhase] ?? currentPhase}
+          </p>
+          {phaseMatches.map(m => {
             const pred = predMap[m.id]
             const result = matchResults[m.id]
             const hasTip = pred && pred.home_goals != null && pred.away_goals != null
@@ -89,7 +114,7 @@ function TodaysTips({
                     )}
                   </div>
                 </div>
-                {m.phase !== 'group' && pred?.predicted_winner && (
+                {pred?.predicted_winner && (
                   <div className="ml-16 text-xs text-gray-500 mt-0.5">
                     Vinnare: <span className="font-medium" style={{ color: 'var(--color-primary)' }}>{pred.predicted_winner}</span>
                     {result?.winner && (
@@ -119,17 +144,22 @@ function TodaysTips({
 
 function TodayHighlights({
   todaysMatches,
+  allMatches,
   matchResults,
   allPredictions,
   participants,
 }: {
   todaysMatches: Match[]
+  allMatches: Match[]
   matchResults: Record<number, MatchResult>
   allPredictions: Record<string, Record<number, Prediction>>
   participants: Participant[]
 }) {
   const matchesWithResults = todaysMatches.filter(m => matchResults[m.id])
   if (matchesWithResults.length === 0) return null
+
+  const matchesByNum = new Map<number, Match>()
+  allMatches.forEach(m => matchesByNum.set(m.match_number, m))
 
   return (
     <div className="bg-white rounded-xl shadow p-4 mb-6">
@@ -145,8 +175,10 @@ function TodayHighlights({
           const winners7: Array<{ name: string; pts: number }> = []
           const winners5: Array<{ name: string; pts: number }> = []
           participants.forEach(p => {
+            const predArr = Object.values(allPredictions[p.id] ?? {})
             const pred = allPredictions[p.id]?.[m.id]
-            const pts = getMatchPoints(pred, m, result)
+            const gateOk = clientGatePass(m, predArr, matchesByNum)
+            const pts = gateOk ? getMatchPoints(pred, m, result) : 0
             if (pts >= 7) winners7.push({ name: p.name, pts })
             else if (pts >= 5) winners5.push({ name: p.name, pts })
           })
@@ -303,7 +335,6 @@ export default function ScoreboardPage() {
   }
 
   async function fetchMatchData() {
-    const todayMatchDay = getMatchDayDate(new Date())
     const [{ data: matchData }, { data: resultData }] = await Promise.all([
       supabase.from('matches').select('*').order('match_date'),
       supabase.from('match_results').select('*'),
@@ -314,22 +345,16 @@ export default function ScoreboardPage() {
       resultData.forEach((r: MatchResult) => { map[r.match_id] = r })
       setMatchResults(map)
 
-      // Fetch all participants' predictions for today's matches
-      const todayMatchIds = (matchData ?? [])
-        .filter((m: Match) => getMatchDayDate(new Date(m.match_date)) === todayMatchDay)
-        .map((m: Match) => m.id)
-      if (todayMatchIds.length > 0) {
-        const { data: predData } = await supabase
-          .from('predictions')
-          .select('*')
-          .in('match_id', todayMatchIds)
-        const predMap: Record<string, Record<number, Prediction>> = {}
-        ;(predData ?? []).forEach((p: Prediction) => {
-          if (!predMap[p.participant_id]) predMap[p.participant_id] = {}
-          predMap[p.participant_id][p.match_id] = p
-        })
-        setAllPredictions(predMap)
-      }
+      // Fetch all participants' predictions (needed for gate checks across all rounds)
+      const { data: predData } = await supabase
+        .from('predictions')
+        .select('*')
+      const predMap: Record<string, Record<number, Prediction>> = {}
+      ;(predData ?? []).forEach((p: Prediction) => {
+        if (!predMap[p.participant_id]) predMap[p.participant_id] = {}
+        predMap[p.participant_id][p.match_id] = p
+      })
+      setAllPredictions(predMap)
     }
   }
 
@@ -397,6 +422,7 @@ export default function ScoreboardPage() {
 
       <TodayHighlights
         todaysMatches={todaysMatches}
+        allMatches={matches}
         matchResults={matchResults}
         allPredictions={allPredictions}
         participants={participants}
@@ -450,14 +476,12 @@ export default function ScoreboardPage() {
                   {expandedIds.has(s.participant_id) && (
                      <tr>
                        <td colSpan={6} className="p-0">
-                         <TodaysTips
-                           todaysMatches={todaysMatches}
-                           allMatches={matches}
-                           matchResults={matchResults}
-                           predictions={dropdownCache[s.participant_id] ?? []}
-                           isLoading={loadingDropdown === s.participant_id}
-                           groupTipsVisible={groupTipsVisible}
-                           knockoutTipsVisible={knockoutTipsVisible}
+                         <KnockoutRoundTips
+                          allMatches={matches}
+                          matchResults={matchResults}
+                          predictions={dropdownCache[s.participant_id] ?? []}
+                          isLoading={loadingDropdown === s.participant_id}
+                          knockoutTipsVisible={knockoutTipsVisible}
                          />
                        </td>
                      </tr>
@@ -487,13 +511,11 @@ export default function ScoreboardPage() {
                   </span>
                 </div>
                 {expandedIds.has(s.participant_id) && (
-                  <TodaysTips
-                    todaysMatches={todaysMatches}
+                  <KnockoutRoundTips
                     allMatches={matches}
                     matchResults={matchResults}
                     predictions={dropdownCache[s.participant_id] ?? []}
                     isLoading={loadingDropdown === s.participant_id}
-                    groupTipsVisible={groupTipsVisible}
                     knockoutTipsVisible={knockoutTipsVisible}
                   />
                 )}

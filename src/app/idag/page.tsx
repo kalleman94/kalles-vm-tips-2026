@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import { Match, MatchResult, Participant, Prediction } from '@/lib/types'
 import { calculateMatchPoints, calculateKnockoutPoints } from '@/lib/scoring'
 import { getMatchDayDate } from '@/lib/matchday'
+import { clientGatePass } from '@/lib/gate'
 
 const PHASE_LABELS: Record<string, string> = {
   group: 'Grupp',
@@ -25,9 +26,10 @@ function getTipLabel(pred: Prediction | undefined, match: Match) {
   return { score, winner }
 }
 
-function getPoints(pred: Prediction | undefined, match: Match, result: MatchResult | undefined): number | null {
+function getPoints(pred: Prediction | undefined, match: Match, result: MatchResult | undefined, predArr: Prediction[], matchesByNum: Map<number, Match>): number | null {
   if (!result) return null
   if (!pred) return 0
+  if (!clientGatePass(match, predArr, matchesByNum)) return 0
   const goalPoints = calculateMatchPoints(pred, result)
   const knockoutPoints = match.phase !== 'group'
     ? calculateKnockoutPoints(match.phase, pred.predicted_winner ?? null, result.winner ?? null)
@@ -48,6 +50,7 @@ function PointsBadge({ points }: { points: number | null }) {
 export default function IdagPage() {
   const supabase = createClient()
   const [matches, setMatches] = useState<Match[]>([])
+  const [allMatches, setAllMatches] = useState<Match[]>([])
   const [results, setResults] = useState<Record<number, MatchResult>>({})
   const [participants, setParticipants] = useState<Participant[]>([])
   const [allPreds, setAllPreds] = useState<Record<string, Record<number, Prediction>>>({})
@@ -86,15 +89,14 @@ export default function IdagPage() {
       ;(resultData ?? []).forEach((r: MatchResult) => { resultMap[r.match_id] = r })
 
       setMatches(todaysMatches)
+      setAllMatches(matchData ?? [])
       setResults(resultMap)
       setParticipants(participantData ?? [])
 
-      if (todaysMatches.length > 0 && (participantData ?? []).length > 0) {
-        const matchIds = todaysMatches.map((m: Match) => m.id)
+      if ((participantData ?? []).length > 0) {
         const { data: predData } = await supabase
           .from('predictions')
           .select('*')
-          .in('match_id', matchIds)
 
         const map: Record<string, Record<number, Prediction>> = {}
         ;(predData ?? []).forEach((p: Prediction) => {
@@ -110,10 +112,14 @@ export default function IdagPage() {
   }, [])
 
   // Daily totals per participant
+  const matchesByNum = new Map<number, Match>()
+  allMatches.forEach(m => matchesByNum.set(m.match_number, m))
+
   const dailyTotals = participants.map(p => {
     const preds = allPreds[p.id] ?? {}
+    const predArr = Object.values(preds)
     const total = matches.reduce((sum, m) => {
-      const pts = getPoints(preds[m.id], m, results[m.id])
+      const pts = getPoints(preds[m.id], m, results[m.id], predArr, matchesByNum)
       return sum + (pts ?? 0)
     }, 0)
     return { id: p.id, name: p.name, total }
@@ -205,7 +211,8 @@ export default function IdagPage() {
                         {participants.map(p => {
                           const pred = allPreds[p.id]?.[m.id]
                           const { score, winner } = getTipLabel(pred, m)
-                          const pts = getPoints(pred, m, result)
+                          const predArr = Object.values(allPreds[p.id] ?? {})
+                          const pts = getPoints(pred, m, result, predArr, matchesByNum)
                           return (
                             <td key={p.id} className="px-3 py-3 text-center">
                               <div className="font-mono font-bold text-gray-700">{score}</div>
@@ -258,7 +265,8 @@ export default function IdagPage() {
                       {participants.map(p => {
                         const pred = allPreds[p.id]?.[m.id]
                         const { score, winner } = getTipLabel(pred, m)
-                        const pts = getPoints(pred, m, result)
+                        const predArr = Object.values(allPreds[p.id] ?? {})
+                        const pts = getPoints(pred, m, result, predArr, matchesByNum)
                         return (
                           <div key={p.id} className="flex items-center justify-between text-sm">
                             <span className="text-gray-600">{p.name}</span>
