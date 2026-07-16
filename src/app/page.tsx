@@ -30,6 +30,16 @@ function getCurrentKnockoutPhase(allMatches: Match[], matchResults: Record<numbe
   return current
 }
 
+// Visa den aktuella fasen + nästa fas (max 2 faser åt gången), t.ex. Brons + Final i slutet av turneringen.
+function getVisibleKnockoutPhases(allMatches: Match[], matchResults: Record<number, MatchResult>): string[] {
+  const current = getCurrentKnockoutPhase(allMatches, matchResults)
+  const idx = KNOCKOUT_PHASES.indexOf(current)
+  const next = KNOCKOUT_PHASES[idx + 1]
+  const phases = [current]
+  if (next && allMatches.some(m => m.phase === next)) phases.push(next)
+  return phases
+}
+
 function getMatchPoints(pred: Prediction | undefined, match: Match, result: MatchResult | undefined): number {
   if (!result || !pred) return 0
   return calculateMatchPoints(pred, result) + calculateKnockoutPoints(match.phase, pred.predicted_winner ?? null, result.winner ?? null)
@@ -59,9 +69,9 @@ function KnockoutRoundTips({
   const matchesByNum = new Map<number, Match>()
   allMatches.forEach(m => matchesByNum.set(m.match_number, m))
 
-  const currentPhase = getCurrentKnockoutPhase(allMatches, matchResults)
-  const phaseMatches = allMatches
-    .filter(m => m.phase === currentPhase)
+  const visiblePhases = getVisibleKnockoutPhases(allMatches, matchResults)
+  const visibleMatches = allMatches
+    .filter(m => visiblePhases.includes(m.phase))
     .sort((a, b) => new Date(a.match_date).getTime() - new Date(b.match_date).getTime())
 
   const predMap: Record<number, Prediction> = {}
@@ -73,69 +83,81 @@ function KnockoutRoundTips({
     <div className="px-4 py-3 bg-blue-50 border-t">
       {isLoading ? (
         <p className="text-sm text-gray-400 py-1">Laddar tips...</p>
-      ) : phaseMatches.length === 0 ? (
+      ) : visibleMatches.length === 0 ? (
         <p className="text-sm text-gray-500 py-1">Inga slutspelsmatcher ännu.</p>
       ) : (
-        <div className="space-y-2">
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">
-            {KNOCKOUT_PHASE_LABELS[currentPhase] ?? currentPhase}
-          </p>
-          {phaseMatches.map(m => {
-            const pred = predMap[m.id]
-            const result = matchResults[m.id]
-            const hasTip = pred && pred.home_goals != null && pred.away_goals != null
-            const tipScore = hasTip ? `${pred.home_goals}–${pred.away_goals}` : '?–?'
-            const gateOk = clientGatePass(m, predictions, matchesByNum)
-            const pts = gateOk ? getMatchPoints(pred, m, result) : 0
-            const resolved = resolvedTeams[m.id]
-            const displayHome = !gateOk && resolved ? resolved.home : m.home_team
-            const displayAway = !gateOk && resolved ? resolved.away : m.away_team
-
+        <div className="space-y-3">
+          {visiblePhases.map(phase => {
+            const phaseMatches = visibleMatches.filter(m => m.phase === phase)
+            if (phaseMatches.length === 0) return null
             return (
-              <div key={m.id} className="text-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 text-gray-600 min-w-0">
-                    <span className="text-xs text-gray-400 shrink-0 w-14">
-                      {new Date(m.match_date).toLocaleDateString('sv-SE', {
-                        timeZone: 'Europe/Stockholm', month: 'short', day: 'numeric',
-                      })}
-                    </span>
-                    <span className="truncate">{displayHome}</span>
-                    <span className="text-gray-400 shrink-0">–</span>
-                    <span className="truncate">{displayAway}</span>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="font-mono font-bold" style={{ color: hasTip ? 'var(--color-primary)' : '#9ca3af' }}>
-                      {tipScore}
-                    </span>
-                    {result && gateOk && (
-                      <span className="text-xs text-gray-500">
-                        ({result.home_goals}–{result.away_goals})
-                      </span>
-                    )}
-                    {result && (
-                      <span className="text-xs font-bold" style={{ color: !gateOk ? '#dc2626' : pts >= 7 ? '#16a34a' : pts >= 5 ? 'var(--color-primary)' : pts > 0 ? '#f59e0b' : '#dc2626' }}>
-                        {!gateOk ? '❌ 0p (fel lag)' : `${pts}p`}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                {!gateOk && result && (
-                  <div className="ml-16 text-xs text-gray-400 mt-0.5">
-                    Faktiskt: <span className="font-medium">{m.home_team} – {m.away_team}</span>
-                    {' '}({result.home_goals}–{result.away_goals})
-                  </div>
-                )}
-                {gateOk && pred?.predicted_winner && (
-                  <div className="ml-16 text-xs text-gray-500 mt-0.5">
-                    Vinnare: <span className="font-medium" style={{ color: 'var(--color-primary)' }}>{pred.predicted_winner}</span>
-                    {result?.winner && (
-                      <span className="ml-1 font-bold" style={{ color: pred.predicted_winner === result.winner ? '#16a34a' : '#dc2626' }}>
-                        {pred.predicted_winner === result.winner ? '✓' : '✗'}
-                      </span>
-                    )}
-                  </div>
-                )}
+              <div key={phase} className="space-y-2">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">
+                  {KNOCKOUT_PHASE_LABELS[phase] ?? phase}
+                </p>
+                {phaseMatches.map(m => {
+                  const pred = predMap[m.id]
+                  const result = matchResults[m.id]
+                  const hasTip = pred && pred.home_goals != null && pred.away_goals != null
+                  const tipScore = hasTip ? `${pred.home_goals}–${pred.away_goals}` : '?–?'
+                  const gateOk = clientGatePass(m, predictions, matchesByNum)
+                  const pts = gateOk ? getMatchPoints(pred, m, result) : 0
+                  const resolved = resolvedTeams[m.id]
+                  const displayHome = resolved?.home ?? m.home_team
+                  const displayAway = resolved?.away ?? m.away_team
+
+                  return (
+                    <div key={m.id} className="text-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 text-gray-600 min-w-0">
+                          <span className="text-xs text-gray-400 shrink-0 w-14">
+                            {new Date(m.match_date).toLocaleDateString('sv-SE', {
+                              timeZone: 'Europe/Stockholm', month: 'short', day: 'numeric',
+                            })}
+                          </span>
+                          <span className="truncate">{displayHome}</span>
+                          <span className="text-gray-400 shrink-0">–</span>
+                          <span className="truncate">{displayAway}</span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="font-mono font-bold" style={{ color: hasTip ? 'var(--color-primary)' : '#9ca3af' }}>
+                            {tipScore}
+                          </span>
+                          {result && gateOk && (
+                            <span className="text-xs text-gray-500">
+                              ({result.home_goals}–{result.away_goals})
+                            </span>
+                          )}
+                          {result ? (
+                            <span className="text-xs font-bold" style={{ color: !gateOk ? '#dc2626' : pts >= 7 ? '#16a34a' : pts >= 5 ? 'var(--color-primary)' : pts > 0 ? '#f59e0b' : '#dc2626' }}>
+                              {!gateOk ? '❌ 0p (fel lag)' : `${pts}p`}
+                            </span>
+                          ) : (
+                            <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ color: gateOk ? '#16a34a' : '#dc2626', backgroundColor: gateOk ? '#dcfce7' : '#fee2e2' }}>
+                              {gateOk ? '✅ Rätt lag' : '❌ Fel lag'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {!gateOk && result && (
+                        <div className="ml-16 text-xs text-gray-400 mt-0.5">
+                          Faktiskt: <span className="font-medium">{m.home_team} – {m.away_team}</span>
+                          {' '}({result.home_goals}–{result.away_goals})
+                        </div>
+                      )}
+                      {pred?.predicted_winner && (
+                        <div className="ml-16 text-xs text-gray-500 mt-0.5">
+                          Vinnare: <span className="font-medium" style={{ color: 'var(--color-primary)' }}>{pred.predicted_winner}</span>
+                          {result?.winner && gateOk && (
+                            <span className="ml-1 font-bold" style={{ color: pred.predicted_winner === result.winner ? '#16a34a' : '#dc2626' }}>
+                              {pred.predicted_winner === result.winner ? '✓' : '✗'}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )
           })}
