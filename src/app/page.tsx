@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { Fragment, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
-import { ParticipantScore, Match, Prediction, MatchResult, Participant } from '@/lib/types'
+import { ParticipantScore, Match, Prediction, MatchResult, Participant, BonusAnswers, DEFAULT_POINTS } from '@/lib/types'
 import { DEFAULT_INFO } from '@/lib/defaults'
 import { calculateMatchPoints, calculateKnockoutPoints } from '@/lib/scoring'
 import { getMatchDayDate } from '@/lib/matchday'
@@ -176,6 +176,65 @@ function KnockoutRoundTips({
   )
 }
 
+function BonusTips({
+  bonus,
+  actualBonus,
+  isLoading,
+}: {
+  bonus: BonusAnswers | null | undefined
+  actualBonus: { champion: string; top_scorer: string; third_place: string }
+  isLoading: boolean
+}) {
+  if (isLoading) {
+    return (
+      <div className="px-4 py-3 bg-amber-50 border-t">
+        <p className="text-sm text-gray-400 py-1">Laddar bonustips...</p>
+      </div>
+    )
+  }
+  if (!bonus) {
+    return (
+      <div className="px-4 py-3 bg-amber-50 border-t">
+        <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">🏆 Bonusfrågor</p>
+        <p className="text-sm text-gray-500 py-1">Inga bonussvar inlämnade.</p>
+      </div>
+    )
+  }
+
+  const rows = [
+    { label: 'VM-vinnare', tip: bonus.champion, facit: actualBonus.champion, pts: DEFAULT_POINTS.bonus_champion },
+    { label: 'Skyttekung', tip: bonus.top_scorer, facit: actualBonus.top_scorer, pts: DEFAULT_POINTS.bonus_top_scorer },
+    { label: 'Bronsmatch-vinnare', tip: bonus.third_place, facit: actualBonus.third_place, pts: DEFAULT_POINTS.bonus_third_place },
+  ]
+
+  return (
+    <div className="px-4 py-3 bg-amber-50 border-t">
+      <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">🏆 Bonusfrågor</p>
+      <div className="space-y-1.5">
+        {rows.map(({ label, tip, facit, pts }) => {
+          const hasFacit = !!facit
+          const isCorrect = hasFacit && !!tip && tip.trim().toLowerCase() === facit.trim().toLowerCase()
+          return (
+            <div key={label} className="flex items-center justify-between gap-3 text-sm">
+              <span className="text-gray-600 shrink-0">{label}:</span>
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="truncate font-medium" style={{ color: tip ? 'var(--color-primary)' : '#9ca3af' }}>
+                  {tip || '–'}
+                </span>
+                {hasFacit && (
+                  <span className="text-xs font-bold shrink-0" style={{ color: isCorrect ? '#16a34a' : '#dc2626' }}>
+                    {isCorrect ? `✓ ${pts}p` : '✗ 0p'}
+                  </span>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function TodayHighlights({
   todaysMatches,
   allMatches,
@@ -334,6 +393,9 @@ export default function ScoreboardPage() {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [dropdownCache, setDropdownCache] = useState<Record<string, Prediction[]>>({})
   const [loadingDropdown, setLoadingDropdown] = useState<string | null>(null)
+  const [bonusCache, setBonusCache] = useState<Record<string, BonusAnswers | null>>({})
+  const [actualBonus, setActualBonus] = useState({ champion: '', top_scorer: '', third_place: '' })
+  const [matchOverviewVisible, setMatchOverviewVisible] = useState(true)
   const supabase = createClient()
 
   useEffect(() => {
@@ -359,13 +421,22 @@ export default function ScoreboardPage() {
   }, [])
 
   async function fetchInfo() {
-    const { data } = await supabase.from('settings').select('key, value').in('key', ['info_box_content', 'info_box_visible', 'group_tips_visible', 'knockout_tips_visible'])
+    const { data } = await supabase.from('settings').select('key, value').in('key', [
+      'info_box_content', 'info_box_visible', 'group_tips_visible', 'knockout_tips_visible',
+      'match_overview_visible', 'actual_champion', 'actual_top_scorer', 'actual_third_place',
+    ])
     const map: Record<string, string> = {}
     data?.forEach((s: any) => { map[s.key] = s.value })
     setInfoContent(map['info_box_content'] ?? DEFAULT_INFO)
     setInfoVisible(map['info_box_visible'] === 'true')
     if (map['group_tips_visible'] !== undefined) setGroupTipsVisible(map['group_tips_visible'] !== 'false')
     if (map['knockout_tips_visible'] !== undefined) setKnockoutTipsVisible(map['knockout_tips_visible'] === 'true')
+    if (map['match_overview_visible'] !== undefined) setMatchOverviewVisible(map['match_overview_visible'] !== 'false')
+    setActualBonus({
+      champion: map['actual_champion'] ?? '',
+      top_scorer: map['actual_top_scorer'] ?? '',
+      third_place: map['actual_third_place'] ?? '',
+    })
   }
 
   async function fetchMatchData() {
@@ -437,8 +508,12 @@ export default function ScoreboardPage() {
     })
     if (!dropdownCache[participantId]) {
       setLoadingDropdown(participantId)
-      const { data } = await supabase.from('predictions').select('*').eq('participant_id', participantId)
+      const [{ data }, { data: bonusData }] = await Promise.all([
+        supabase.from('predictions').select('*').eq('participant_id', participantId),
+        supabase.from('bonus_answers').select('*').eq('participant_id', participantId).maybeSingle(),
+      ])
       setDropdownCache(prev => ({ ...prev, [participantId]: data ?? [] }))
+      setBonusCache(prev => ({ ...prev, [participantId]: bonusData ?? null }))
       setLoadingDropdown(null)
     }
   }
@@ -469,7 +544,7 @@ export default function ScoreboardPage() {
         participants={participants}
       />
 
-      <MatchOverview matches={matches} matchResults={matchResults} />
+      {matchOverviewVisible && <MatchOverview matches={matches} matchResults={matchResults} />}
       {loading ? (
         <div className="text-center py-16 text-gray-400">Laddar...</div>
       ) : scores.length === 0 ? (
@@ -524,6 +599,11 @@ export default function ScoreboardPage() {
                           isLoading={loadingDropdown === s.participant_id}
                           knockoutTipsVisible={knockoutTipsVisible}
                          />
+                         <BonusTips
+                           bonus={bonusCache[s.participant_id]}
+                           actualBonus={actualBonus}
+                           isLoading={loadingDropdown === s.participant_id}
+                         />
                        </td>
                      </tr>
                    )}
@@ -552,13 +632,20 @@ export default function ScoreboardPage() {
                   </span>
                 </div>
                 {expandedIds.has(s.participant_id) && (
-                  <KnockoutRoundTips
-                    allMatches={matches}
-                    matchResults={matchResults}
-                    predictions={dropdownCache[s.participant_id] ?? []}
-                    isLoading={loadingDropdown === s.participant_id}
-                    knockoutTipsVisible={knockoutTipsVisible}
-                  />
+                  <>
+                    <KnockoutRoundTips
+                      allMatches={matches}
+                      matchResults={matchResults}
+                      predictions={dropdownCache[s.participant_id] ?? []}
+                      isLoading={loadingDropdown === s.participant_id}
+                      knockoutTipsVisible={knockoutTipsVisible}
+                    />
+                    <BonusTips
+                      bonus={bonusCache[s.participant_id]}
+                      actualBonus={actualBonus}
+                      isLoading={loadingDropdown === s.participant_id}
+                    />
+                  </>
                 )}
               </div>
             ))}

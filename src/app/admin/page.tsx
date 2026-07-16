@@ -35,6 +35,7 @@ export default function AdminPage() {
   const [savingLock, setSavingLock] = useState<string | null>(null)
   const [groupTipsVisible, setGroupTipsVisible] = useState(true)
   const [knockoutTipsVisible, setKnockoutTipsVisible] = useState(false)
+  const [matchOverviewVisible, setMatchOverviewVisible] = useState(true)
   const [bonus, setBonus] = useState({ champion: '', top_scorer: '', third_place: '' })
   const [savingBonus, setSavingBonus] = useState(false)
   const [bonusMsg, setBonusMsg] = useState('')
@@ -97,6 +98,7 @@ export default function AdminPage() {
     setKnockoutLocked(map['knockout_locked'] === 'true')
     setGroupTipsVisible(map['group_tips_visible'] !== 'false')
     setKnockoutTipsVisible(map['knockout_tips_visible'] === 'true')
+    setMatchOverviewVisible(map['match_overview_visible'] !== 'false')
     setBonus({
       champion: map['actual_champion'] ?? '',
       top_scorer: map['actual_top_scorer'] ?? '',
@@ -616,6 +618,27 @@ export default function AdminPage() {
           >
             <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
               knockoutTipsVisible ? 'translate-x-6' : 'translate-x-1'
+            }`} />
+          </button>
+        </div>
+        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg mb-2">
+          <div>
+            <p className="font-medium text-sm">📋 Visa matchöversikt på startsidan</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {matchOverviewVisible
+                ? '✅ Synlig – "Matcher"-rutan visas på startsidan'
+                : '🙈 Dold – "Matcher"-rutan är gömd på startsidan'}
+            </p>
+          </div>
+          <button
+            onClick={() => toggleSetting('match_overview_visible', matchOverviewVisible, setMatchOverviewVisible)}
+            disabled={savingLock === 'match_overview_visible'}
+            className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors disabled:opacity-50 ${
+              matchOverviewVisible ? 'bg-green-500' : 'bg-gray-300'
+            }`}
+          >
+            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+              matchOverviewVisible ? 'translate-x-6' : 'translate-x-1'
             }`} />
           </button>
         </div>
