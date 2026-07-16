@@ -105,6 +105,11 @@ function KnockoutRoundTips({
                   const resolved = resolvedTeams[m.id]
                   const displayHome = resolved?.home ?? m.home_team
                   const displayAway = resolved?.away ?? m.away_team
+                  // Rent visuell jämförelse: matchar deltagarens visade lag de riktiga lagen från admin?
+                  // Detta styr ENDAST badge-texten/"Egentligen"-raden, aldrig poäng eller gateOk.
+                  const teamsMatch =
+                    (displayHome === m.home_team && displayAway === m.away_team) ||
+                    (displayHome === m.away_team && displayAway === m.home_team)
 
                   return (
                     <div key={m.id} className="text-sm">
@@ -133,13 +138,13 @@ function KnockoutRoundTips({
                               {!gateOk ? '❌ 0p (fel lag)' : `${pts}p`}
                             </span>
                           ) : (
-                            <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ color: gateOk ? '#16a34a' : '#dc2626', backgroundColor: gateOk ? '#dcfce7' : '#fee2e2' }}>
-                              {gateOk ? '✅ Rätt lag' : '❌ Fel lag'}
+                            <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ color: teamsMatch ? '#16a34a' : '#dc2626', backgroundColor: teamsMatch ? '#dcfce7' : '#fee2e2' }}>
+                              {teamsMatch ? '✅ Rätt lag' : '❌ Fel lag'}
                             </span>
                           )}
                         </div>
                       </div>
-                      {!gateOk && (
+                      {!teamsMatch && (
                         <div className="ml-16 text-xs text-gray-400 mt-0.5">
                           Egentligen: <span className="font-medium">{m.home_team} – {m.away_team}</span>
                           {result && <> ({result.home_goals}–{result.away_goals})</>}
