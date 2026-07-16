@@ -139,10 +139,10 @@ function KnockoutRoundTips({
                           )}
                         </div>
                       </div>
-                      {!gateOk && result && (
+                      {!gateOk && (
                         <div className="ml-16 text-xs text-gray-400 mt-0.5">
-                          Faktiskt: <span className="font-medium">{m.home_team} – {m.away_team}</span>
-                          {' '}({result.home_goals}–{result.away_goals})
+                          Egentligen: <span className="font-medium">{m.home_team} – {m.away_team}</span>
+                          {result && <> ({result.home_goals}–{result.away_goals})</>}
                         </div>
                       )}
                       {pred?.predicted_winner && (
