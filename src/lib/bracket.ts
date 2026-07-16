@@ -51,10 +51,13 @@ export function buildResolvedTeams(
     const homeSource = byNum[homeNum]
     const awaySource = byNum[awayNum]
     if (!toMatch || !homeSource || !awaySource) continue
+    // Om matchens riktiga lag redan är kända (inte längre platshållare) ska vi
+    // ALDRIG skriva över dem med deltagarens egen (ev. felaktiga) gissning från
+    // tidigare rundor – då visar vi hellre den verkliga matchningen.
     const homeWinner = predictions[homeSource.id]?.predicted_winner
     const awayWinner = predictions[awaySource.id]?.predicted_winner
-    if (homeWinner) resolved[toMatch.id].home = homeWinner
-    if (awayWinner) resolved[toMatch.id].away = awayWinner
+    if (homeWinner && isPlaceholderName(resolved[toMatch.id].home)) resolved[toMatch.id].home = homeWinner
+    if (awayWinner && isPlaceholderName(resolved[toMatch.id].away)) resolved[toMatch.id].away = awayWinner
   }
 
   // Bronze: förlorare av de två semifinalerna
@@ -66,8 +69,12 @@ export function buildResolvedTeams(
     const sf2r = resolved[sf2.id]
     const w1 = predictions[sf1.id]?.predicted_winner
     const w2 = predictions[sf2.id]?.predicted_winner
-    if (w1) resolved[bronzeMatch.id].home = w1 === sf1r.home ? sf1r.away : sf1r.home
-    if (w2) resolved[bronzeMatch.id].away = w2 === sf2r.home ? sf2r.away : sf2r.home
+    if (w1 && isPlaceholderName(resolved[bronzeMatch.id].home)) {
+      resolved[bronzeMatch.id].home = w1 === sf1r.home ? sf1r.away : sf1r.home
+    }
+    if (w2 && isPlaceholderName(resolved[bronzeMatch.id].away)) {
+      resolved[bronzeMatch.id].away = w2 === sf2r.home ? sf2r.away : sf2r.home
+    }
   }
 
   return resolved
